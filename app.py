@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
 import re
+import time
+from datetime import datetime
 from urllib.parse import urlparse
 import Levenshtein
 
@@ -10,6 +12,9 @@ CORS(app)
 
 model = joblib.load("phishing_web_model.pkl")
 
+API_VERSION = "1.1"
+MODEL_NAME = "Random Forest Classifier"
+SCORE_METHOD = "Weighted Explainable Scoring"
 
 OFFICIAL_DOMAINS = {
     "google": ["google.com", "google.com.my"],
@@ -35,7 +40,8 @@ OFFICIAL_DOMAINS = {
 SUSPICIOUS_KEYWORDS = [
     "login", "verify", "secure", "update", "account", "confirm",
     "payment", "password", "unlock", "suspend", "wallet", "support",
-    "limited", "signin", "reset", "security", "bank", "urgent", "locked"
+    "limited", "signin", "reset", "security", "bank", "urgent",
+    "locked", "email", "emails", "credential", "credentials"
 ]
 
 BAD_TLDS = {
@@ -128,7 +134,21 @@ def extract_url_features(url):
     ]]
 
 
-def indicator(name, score, status, explanation, value=None):
+def get_phishing_probability(features):
+    probability = model.predict_proba(features)[0]
+
+    if hasattr(model, "classes_") and 1 in model.classes_:
+        phishing_index = list(model.classes_).index(1)
+        phishing_probability = float(probability[phishing_index])
+    else:
+        phishing_probability = float(probability[-1])
+
+    confidence = float(max(probability))
+
+    return phishing_probability, confidence
+
+
+def indicator(name, score, status, explanation, value=None, weight=None):
     score = int(max(0, min(100, score)))
 
     return {
@@ -138,34 +158,41 @@ def indicator(name, score, status, explanation, value=None):
         "safety_score": 100 - score,
         "status": status,
         "explanation": explanation,
-        "value": value
+        "value": value,
+        "weight": weight
     }
 
 
 def analyse_url(url):
     url = normalize_url(url)
     lower = url.lower()
-    parsed = urlparse(url)
     domain = get_domain(url)
     tld = get_tld(domain)
 
     indicators = []
     critical = False
+    official_domain = is_official_domain(domain)
 
-    if is_official_domain(domain):
+    if official_domain:
         indicators.append(indicator(
             "officialDomain",
             0,
             "safe",
-            "The URL matches a verified official domain.",
+            "The URL matches a verified official domain. Full URL indicators are still analysed for transparency.",
+            domain
+        ))
+    else:
+        indicators.append(indicator(
+            "officialDomain",
+            30,
+            "warning",
+            "The URL does not match the verified official-domain whitelist.",
             domain
         ))
 
-        return 0, 100, "Safe", "Trusted", False, indicators
-
     # 1. AI Model, 35%
-    probability = model.predict_proba(extract_url_features(url))[0]
-    ai_phishing_probability = float(probability[0])
+    features = extract_url_features(url)
+    ai_phishing_probability, ai_confidence = get_phishing_probability(features)
     ai_score = int(ai_phishing_probability * 100)
 
     indicators.append(indicator(
@@ -173,7 +200,13 @@ def analyse_url(url):
         ai_score,
         "danger" if ai_score >= 70 else "warning" if ai_score >= 40 else "safe",
         f"The trained AI model estimates phishing probability at {ai_phishing_probability:.2f}.",
-        round(ai_phishing_probability, 4)
+        {
+            "phishing_probability": round(ai_phishing_probability, 4),
+            "phishing_probability_percent": round(ai_phishing_probability * 100, 2),
+            "confidence": round(ai_confidence, 4),
+            "confidence_percent": round(ai_confidence * 100, 2)
+        },
+        "35%"
     ))
 
     # 2. Brand Verification, 25%
@@ -196,7 +229,8 @@ def analyse_url(url):
         brand_score,
         "danger" if brand_score >= 70 else "safe",
         brand_reason,
-        brand_value
+        brand_value,
+        "25%"
     ))
 
     # 3. Homograph / Look-alike Domain, 10%
@@ -235,7 +269,8 @@ def analyse_url(url):
         homograph_score,
         "danger" if homograph_score >= 70 else "safe",
         homograph_reason,
-        homograph_value
+        homograph_value,
+        "10%"
     ))
 
     # 4. URL Structure, 10%
@@ -257,10 +292,7 @@ def analyse_url(url):
     if "xn--" in domain:
         structure_score = 100
         critical = True
-
-        structure_reasons.append(
-            "Punycode domain detected (possible IDN homograph attack)"
-        )
+        structure_reasons.append("Punycode domain detected (possible IDN homograph attack)")
 
     if tld in BAD_TLDS:
         structure_score += BAD_TLDS[tld]
@@ -286,7 +318,8 @@ def analyse_url(url):
         structure_score,
         "danger" if structure_score >= 70 else "warning" if structure_score >= 40 else "safe",
         "URL structure issue(s): " + ", ".join(structure_reasons) if structure_reasons else "No abnormal URL structure was detected.",
-        structure_reasons
+        structure_reasons,
+        "10%"
     ))
 
     # 5. Suspicious Keywords, 10%
@@ -294,17 +327,12 @@ def analyse_url(url):
 
     if len(found_keywords) >= 4:
         keyword_score = 100
-        structure_score = max(structure_score, 70)
-
     elif len(found_keywords) >= 3:
         keyword_score = 100
-
     elif len(found_keywords) == 2:
         keyword_score = 75
-
     elif len(found_keywords) == 1:
         keyword_score = 45
-
     else:
         keyword_score = 0
 
@@ -313,10 +341,11 @@ def analyse_url(url):
         keyword_score,
         "danger" if keyword_score >= 70 else "warning" if keyword_score >= 40 else "safe",
         "The URL contains suspicious keyword(s): " + ", ".join(found_keywords) if found_keywords else "No suspicious keyword was detected.",
-        found_keywords
+        found_keywords,
+        "10%"
     ))
 
-    # 6. SSL / HTTPS, 5%
+    # 6. HTTPS / SSL, 5%
     if lower.startswith("https://"):
         ssl_score = 0
         ssl_reason = "The URL uses HTTPS."
@@ -331,7 +360,8 @@ def analyse_url(url):
         ssl_score,
         ssl_status,
         ssl_reason,
-        "HTTPS" if ssl_score == 0 else "HTTP"
+        "HTTPS" if ssl_score == 0 else "HTTP",
+        "5%"
     ))
 
     # 7. URL Length / Complexity, 5%
@@ -364,13 +394,14 @@ def analyse_url(url):
         {
             "length": len(url),
             "special_characters": special_count
-        }
+        },
+        "5%"
     ))
 
-    # 8. Domain Reputation, explanation only
+    # 8. Internal Reputation Indicator
     reputation_score = 0
     reputation_status = "safe"
-    reputation_reason = "Domain reputation is not connected to an external blacklist in this prototype."
+    reputation_reason = "Internal reputation indicator shows no strong internal red flags."
 
     if brand_score >= 100 or homograph_score >= 100 or structure_score >= 90:
         reputation_score = 70
@@ -385,8 +416,6 @@ def analyse_url(url):
         None
     ))
 
-    # Weighted score:
-    # AI 35%, Brand 25%, Homograph 10%, Structure 10%, Keywords 10%, SSL 5%, Length 5%
     weighted_score = (
         ai_score * 0.35 +
         brand_score * 0.25 +
@@ -399,12 +428,15 @@ def analyse_url(url):
 
     risk_score = int(round(weighted_score))
 
-    # Critical override for obvious attacks only
     if critical:
         risk_score = 100
 
     if "@" in url or re.search(r"(\d{1,3}\.){3}\d{1,3}", url):
         risk_score = max(risk_score, 95)
+
+    if official_domain and not critical:
+        if brand_score == 0 and homograph_score == 0 and structure_score < 70:
+            risk_score = min(risk_score, 20)
 
     risk_score = max(0, min(100, risk_score))
     safety_score = 100 - risk_score
@@ -425,7 +457,18 @@ def analyse_url(url):
         decision = "Safe"
         result = "Trusted"
 
-    return risk_score, safety_score, decision, result, critical, indicators
+    model_info = {
+        "model_name": MODEL_NAME,
+        "score_method": SCORE_METHOD,
+        "api_version": API_VERSION,
+        "ai_phishing_probability": round(ai_phishing_probability, 4),
+        "ai_phishing_probability_percent": round(ai_phishing_probability * 100, 2),
+        "ai_confidence": round(ai_confidence, 4),
+        "ai_confidence_percent": round(ai_confidence * 100, 2),
+        "official_domain": official_domain
+    }
+
+    return risk_score, safety_score, decision, result, critical, indicators, model_info
 
 
 def build_recommendations(risk_score):
@@ -467,6 +510,8 @@ def home():
 
 @app.route("/predict", methods=["POST"])
 def predict():
+    start_time = time.time()
+
     data = request.json
 
     if not data or "url" not in data:
@@ -474,7 +519,7 @@ def predict():
 
     url = normalize_url(data["url"])
 
-    risk_score, safety_score, decision, result, critical, indicators = analyse_url(url)
+    risk_score, safety_score, decision, result, critical, indicators, model_info = analyse_url(url)
 
     explanations = [
         item["explanation"]
@@ -487,6 +532,9 @@ def predict():
 
     prediction = 1 if decision in ["Phishing", "Suspicious"] else 0
 
+    analysis_time_ms = round((time.time() - start_time) * 1000, 2)
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     return jsonify({
         "url": url,
         "prediction": prediction,
@@ -495,6 +543,15 @@ def predict():
         "risk_score": risk_score,
         "safety_score": safety_score,
         "critical_phishing": critical,
+        "timestamp": timestamp,
+        "analysis_time_ms": analysis_time_ms,
+        "model_name": MODEL_NAME,
+        "score_method": SCORE_METHOD,
+        "api_version": API_VERSION,
+        "confidence": model_info["ai_confidence_percent"],
+        "ai_phishing_probability": model_info["ai_phishing_probability"],
+        "ai_phishing_probability_percent": model_info["ai_phishing_probability_percent"],
+        "model_info": model_info,
         "explanations": explanations,
         "indicators": indicators,
         "recommendations": build_recommendations(risk_score)
@@ -502,4 +559,4 @@ def predict():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
