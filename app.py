@@ -14,7 +14,7 @@ model = joblib.load("phishing_web_model.pkl")
 
 API_VERSION = "1.2"
 MODEL_NAME = "Random Forest Classifier"
-SCORE_METHOD = "Weighted Explainable AI with Rule Overrides"
+SCORE_METHOD = "Weighted Explainable Scoring with Look-alike Domain Detection"
 
 OFFICIAL_DOMAINS = {
     "google": ["google.com", "google.com.my"],
@@ -35,21 +35,14 @@ OFFICIAL_DOMAINS = {
     "stackoverflow": ["stackoverflow.com"],
     "ukm": ["ukm.my"],
     "openai": ["openai.com", "chatgpt.com"],
-    "render": ["render.com"],
-    "vercel": ["vercel.com", "vercel.app"],
-    "netlify": ["netlify.com", "netlify.app"],
-    "railway": ["railway.app"],
-    "heroku": ["herokuapp.com"],
-    "cloudflare": ["cloudflare.com", "pages.dev"]
+    "render": ["render.com"]
 }
 
 SUSPICIOUS_KEYWORDS = [
     "login", "verify", "secure", "update", "account", "confirm",
     "payment", "password", "unlock", "suspend", "wallet", "support",
     "limited", "signin", "reset", "security", "bank", "urgent",
-    "locked", "email", "emails", "credential", "credentials",
-    "dashboard", "admin", "console", "panel", "portal", "billing",
-    "settings", "server", "srv", "webmail", "cpanel", "auth", "session"
+    "locked", "email", "emails", "credential", "credentials"
 ]
 
 BAD_TLDS = {
@@ -63,27 +56,10 @@ BAD_TLDS = {
     "gq": 75,
     "info": 65,
     "work": 65,
-    "loan": 80
+    "loan": 80,
+    "c0m": 100,
+    "corn": 100
 }
-
-SENSITIVE_SERVICE_WORDS = {
-    "dashboard", "admin", "console", "panel", "portal", "billing",
-    "settings", "server", "srv", "webmail", "cpanel", "auth", "session"
-}
-
-CONFUSABLE_MAP = str.maketrans({
-    "0": "o",
-    "1": "l",
-    "3": "e",
-    "4": "a",
-    "5": "s",
-    "7": "t",
-    "@": "a",
-    "$": "s",
-    "|": "l"
-})
-
-RANDOM_TOKEN_RE = re.compile(r"[a-z0-9]{10,}", re.I)
 
 
 def normalize_url(url):
@@ -116,45 +92,44 @@ def get_tld(domain):
     return parts[-1] if len(parts) > 1 else ""
 
 
+def get_root_domain(domain):
+    parts = domain.split(".")
+
+    if len(parts) >= 3 and parts[-1] in ["my", "uk", "au"] and parts[-2] in ["com", "edu", "gov", "net", "org"]:
+        return ".".join(parts[-3:])
+
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])
+
+    return domain
+
+
 def normalize_confusable(text):
-    text = str(text).lower().translate(CONFUSABLE_MAP)
-    return text.replace("rn", "m").replace("vv", "w")
+    text = text.lower()
 
+    confusable_map = {
+        "0": "o",
+        "1": "l",
+        "3": "e",
+        "5": "s",
+        "7": "t",
+        "8": "b",
+        "9": "g",
+        "i": "l",
+        "I": "l",
+        "|": "l",
+        "!": "l",
+        "$": "s",
+        "@": "a"
+    }
 
-def domain_labels(domain):
-    return [label for label in domain.split(".") if label]
+    for fake, real in confusable_map.items():
+        text = text.replace(fake, real)
 
+    text = text.replace("rn", "m")
+    text = text.replace("vv", "w")
 
-def domain_candidates(domain):
-    labels = domain_labels(domain)
-    candidates = {domain}
-
-    for index in range(len(labels) - 1):
-        candidates.add(".".join(labels[index:index + 2]))
-
-    if len(labels) >= 3:
-        candidates.add(".".join(labels[-3:]))
-
-    return candidates
-
-
-def has_confusable_com_label(domain):
-    labels = domain_labels(domain)
-
-    if not labels:
-        return False
-
-    tld_label = labels[-1]
-    return tld_label != "com" and normalize_confusable(tld_label) == "com"
-
-
-def find_sensitive_service_words(domain, path):
-    normalized_text = normalize_confusable(f"{domain} {path}")
-    return [
-        word
-        for word in SENSITIVE_SERVICE_WORDS
-        if word in normalized_text
-    ]
+    return text
 
 
 def is_official_domain(domain):
@@ -163,44 +138,6 @@ def is_official_domain(domain):
             if domain == official or domain.endswith("." + official):
                 return True
     return False
-
-
-def find_lookalike_domain(domain):
-    if is_official_domain(domain):
-        return None
-
-    best_match = None
-
-    for candidate in domain_candidates(domain):
-        normalized_candidate = normalize_confusable(candidate)
-
-        for brand, official_list in OFFICIAL_DOMAINS.items():
-            for official in official_list:
-                normalized_official = normalize_confusable(official)
-
-                if candidate == official or domain.endswith("." + official):
-                    continue
-
-                sim_original = Levenshtein.ratio(candidate, official)
-                sim_normalized = Levenshtein.ratio(
-                    normalized_candidate,
-                    normalized_official
-                )
-                sim = max(sim_original, sim_normalized)
-
-                if normalized_candidate == normalized_official and candidate != official:
-                    sim = 1.0
-
-                if sim >= 0.88 and (best_match is None or sim > best_match["similarity"]):
-                    best_match = {
-                        "brand": brand,
-                        "domain": domain,
-                        "candidate": candidate,
-                        "official": official,
-                        "similarity": round(sim, 2)
-                    }
-
-    return best_match
 
 
 def extract_url_features(url):
@@ -261,8 +198,9 @@ def analyse_url(url):
     url = normalize_url(url)
     lower = url.lower()
     normalized_lower = normalize_confusable(lower)
-    parsed = urlparse(url)
+
     domain = get_domain(url)
+    root_domain = get_root_domain(domain)
     tld = get_tld(domain)
 
     indicators = []
@@ -280,45 +218,53 @@ def analyse_url(url):
     else:
         indicators.append(indicator(
             "officialDomain",
-            0,
-            "safe",
-            "The URL is not on the verified official-domain whitelist; this is not treated as risk by itself.",
+            30,
+            "warning",
+            "The URL does not match the verified official-domain whitelist.",
             domain
         ))
 
-    # 1. AI Model, 20%
     features = extract_url_features(url)
     ai_phishing_probability, ai_confidence = get_phishing_probability(features)
-    raw_ai_score = int(ai_phishing_probability * 100)
-    ai_score = raw_ai_score
+    ai_score = int(ai_phishing_probability * 100)
 
-    ai_indicator = indicator(
+    if official_domain and ai_score >= 70:
+        ai_score = 10
+        ai_explanation = (
+            f"The trained AI model produced a high raw phishing probability "
+            f"({ai_phishing_probability:.2f}), but the domain matches a verified official domain. "
+            f"The final score applies official-domain correction to reduce false positives."
+        )
+    else:
+        ai_explanation = f"The trained AI model estimates phishing probability at {ai_phishing_probability:.2f}."
+
+    indicators.append(indicator(
         "aiModelProbability",
-        raw_ai_score,
-        "danger" if raw_ai_score >= 70 else "warning" if raw_ai_score >= 40 else "safe",
-        f"The trained AI model estimates phishing probability at {ai_phishing_probability:.2f}.",
+        ai_score,
+        "danger" if ai_score >= 70 else "warning" if ai_score >= 40 else "safe",
+        ai_explanation,
         {
-            "phishing_probability": round(ai_phishing_probability, 4),
-            "phishing_probability_percent": round(ai_phishing_probability * 100, 2),
+            "raw_phishing_probability": round(ai_phishing_probability, 4),
+            "raw_phishing_probability_percent": round(ai_phishing_probability * 100, 2),
+            "adjusted_ai_risk_score": ai_score,
             "confidence": round(ai_confidence, 4),
-            "confidence_percent": round(ai_confidence * 100, 2)
+            "confidence_percent": round(ai_confidence * 100, 2),
+            "model_classes": list(model.classes_) if hasattr(model, "classes_") else None
         },
-        "20%"
-    )
-    indicators.append(ai_indicator)
+        "35%"
+    ))
 
-    # 2. Brand Verification, 25%
     brand_score = 0
     brand_reason = "No brand impersonation was detected."
     brand_value = None
 
     for brand, official_list in OFFICIAL_DOMAINS.items():
-        if brand in lower:
+        if brand in lower or brand in normalized_lower:
             is_real = any(domain == d or domain.endswith("." + d) for d in official_list)
 
             if not is_real:
                 brand_score = 100
-                brand_reason = f"Possible brand impersonation detected: '{brand}' appears in an unofficial domain."
+                brand_reason = f"Possible brand impersonation detected: '{brand}' appears in an unofficial or look-alike domain."
                 brand_value = brand
                 break
 
@@ -331,21 +277,48 @@ def analyse_url(url):
         "25%"
     ))
 
-    # 3. Homograph / Look-alike Domain, 15%
     homograph_score = 0
     homograph_reason = "No strong look-alike domain pattern was detected."
     homograph_value = domain
 
-    lookalike_match = find_lookalike_domain(domain)
+    normalized_domain = normalize_confusable(domain)
+    normalized_root_domain = normalize_confusable(root_domain)
 
-    if lookalike_match:
-        homograph_score = 100
-        critical = True
-        homograph_reason = (
-            "Critical look-alike domain detected. "
-            f"The domain strongly resembles '{lookalike_match['official']}'."
-        )
-        homograph_value = lookalike_match
+    for brand, official_list in OFFICIAL_DOMAINS.items():
+        for official in official_list:
+            normalized_official = normalize_confusable(official)
+
+            sim_full = Levenshtein.ratio(domain, official)
+            sim_full_normalized = Levenshtein.ratio(normalized_domain, normalized_official)
+
+            sim_root = Levenshtein.ratio(root_domain, official)
+            sim_root_normalized = Levenshtein.ratio(normalized_root_domain, normalized_official)
+
+            sim = max(
+                sim_full,
+                sim_full_normalized,
+                sim_root,
+                sim_root_normalized
+            )
+
+            is_exact_official = domain == official or root_domain == official or domain.endswith("." + official)
+
+            if not is_exact_official and sim >= 0.88:
+                homograph_score = 100
+                critical = True
+                homograph_reason = f"Critical look-alike domain detected. The domain strongly resembles '{official}'."
+                homograph_value = {
+                    "domain": domain,
+                    "root_domain": root_domain,
+                    "normalized_domain": normalized_domain,
+                    "normalized_root_domain": normalized_root_domain,
+                    "official": official,
+                    "similarity": round(sim, 2)
+                }
+                break
+
+        if homograph_score == 100:
+            break
 
     indicators.append(indicator(
         "homographAttack",
@@ -353,15 +326,11 @@ def analyse_url(url):
         "danger" if homograph_score >= 70 else "safe",
         homograph_reason,
         homograph_value,
-        "15%"
+        "10%"
     ))
 
-    # 4. URL Structure, 20%
     structure_score = 0
     structure_reasons = []
-    confusable_com_label = has_confusable_com_label(domain)
-    service_hits = find_sensitive_service_words(domain, parsed.path)
-    random_path_token = bool(RANDOM_TOKEN_RE.search(parsed.path))
 
     if "@" in url:
         structure_score += 100
@@ -371,22 +340,13 @@ def analyse_url(url):
         structure_score += 100
         structure_reasons.append("URL uses an IP address instead of a normal domain")
 
-    if confusable_com_label:
-        structure_score += 90
-        critical = True
-        structure_reasons.append("Domain contains a look-alike '.com' label such as 'c0m' or 'corn'")
-
-    if ".corn" in domain:
-        structure_score += 90
+    if ".corn" in domain or tld == "corn":
+        structure_score += 100
         structure_reasons.append("'.corn' detected, a common typo of '.com'")
 
-    if service_hits:
-        structure_score += 45
-        structure_reasons.append("Sensitive service/admin word(s) detected: " + ", ".join(service_hits))
-
-    if random_path_token:
-        structure_score += 35
-        structure_reasons.append("URL path contains a long random-looking token")
+    if ".c0m" in domain or tld == "c0m":
+        structure_score += 100
+        structure_reasons.append("'.c0m' detected, a look-alike typo of '.com'")
 
     if "xn--" in domain:
         structure_score = 100
@@ -418,15 +378,10 @@ def analyse_url(url):
         "danger" if structure_score >= 70 else "warning" if structure_score >= 40 else "safe",
         "URL structure issue(s): " + ", ".join(structure_reasons) if structure_reasons else "No abnormal URL structure was detected.",
         structure_reasons,
-        "20%"
+        "10%"
     ))
 
-    # 5. Suspicious Keywords, 10%
-    found_keywords = [
-        word
-        for word in SUSPICIOUS_KEYWORDS
-        if word in lower or word in normalized_lower
-    ]
+    found_keywords = [word for word in SUSPICIOUS_KEYWORDS if word in lower]
 
     if len(found_keywords) >= 4:
         keyword_score = 100
@@ -448,7 +403,6 @@ def analyse_url(url):
         "10%"
     ))
 
-    # 6. HTTPS / SSL, 5%
     if lower.startswith("https://"):
         ssl_score = 0
         ssl_reason = "The URL uses HTTPS."
@@ -467,7 +421,6 @@ def analyse_url(url):
         "5%"
     ))
 
-    # 7. URL Length / Complexity, 5%
     length_score = 0
     length_reasons = []
 
@@ -501,34 +454,6 @@ def analyse_url(url):
         "5%"
     ))
 
-    official_clean = (
-        official_domain
-        and not critical
-        and brand_score == 0
-        and homograph_score == 0
-        and structure_score == 0
-        and keyword_score == 0
-        and ssl_score == 0
-        and length_score < 70
-    )
-
-    if official_clean:
-        ai_score = 0
-        ai_indicator.update({
-            "score": 0,
-            "risk_points": 0,
-            "safety_score": 100,
-            "status": "safe",
-            "explanation": (
-                "Raw AI probability was suppressed because the hostname is a verified official domain "
-                "and no URL-level risk indicators were detected."
-            )
-        })
-
-        if isinstance(ai_indicator.get("value"), dict):
-            ai_indicator["value"]["raw_ai_score"] = raw_ai_score
-
-    # 8. Internal Reputation Indicator
     reputation_score = 0
     reputation_status = "safe"
     reputation_reason = "Internal reputation indicator shows no strong internal red flags."
@@ -547,10 +472,10 @@ def analyse_url(url):
     ))
 
     weighted_score = (
-        ai_score * 0.20 +
+        ai_score * 0.35 +
         brand_score * 0.25 +
-        homograph_score * 0.15 +
-        structure_score * 0.20 +
+        homograph_score * 0.10 +
+        structure_score * 0.10 +
         keyword_score * 0.10 +
         ssl_score * 0.05 +
         length_score * 0.05
@@ -561,17 +486,15 @@ def analyse_url(url):
     if critical:
         risk_score = 100
 
+    if ".c0m" in domain or ".corn" in domain or tld in ["c0m", "corn"]:
+        risk_score = max(risk_score, 95)
+
     if "@" in url or re.search(r"(\d{1,3}\.){3}\d{1,3}", url):
         risk_score = max(risk_score, 95)
 
-    if service_hits and random_path_token:
-        risk_score = max(risk_score, 60)
-
     if official_domain and not critical:
-        if official_clean:
-            risk_score = 0
-        elif brand_score == 0 and homograph_score == 0 and structure_score < 70:
-            risk_score = min(risk_score, 35)
+        if brand_score == 0 and homograph_score == 0 and structure_score < 70:
+            risk_score = min(risk_score, 20)
 
     risk_score = max(0, min(100, risk_score))
     safety_score = 100 - risk_score
@@ -596,11 +519,16 @@ def analyse_url(url):
         "model_name": MODEL_NAME,
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
-        "ai_phishing_probability": round(ai_phishing_probability, 4),
-        "ai_phishing_probability_percent": round(ai_phishing_probability * 100, 2),
+        "raw_ai_phishing_probability": round(ai_phishing_probability, 4),
+        "raw_ai_phishing_probability_percent": round(ai_phishing_probability * 100, 2),
+        "adjusted_ai_risk_score": ai_score,
         "ai_confidence": round(ai_confidence, 4),
         "ai_confidence_percent": round(ai_confidence * 100, 2),
-        "official_domain": official_domain
+        "official_domain": official_domain,
+        "domain": domain,
+        "root_domain": root_domain,
+        "normalized_domain": normalized_domain,
+        "normalized_root_domain": normalized_root_domain
     }
 
     return risk_score, safety_score, decision, result, critical, indicators, model_info
@@ -684,8 +612,8 @@ def predict():
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
         "confidence": model_info["ai_confidence_percent"],
-        "ai_phishing_probability": model_info["ai_phishing_probability"],
-        "ai_phishing_probability_percent": model_info["ai_phishing_probability_percent"],
+        "ai_phishing_probability": model_info["raw_ai_phishing_probability"],
+        "ai_phishing_probability_percent": model_info["raw_ai_phishing_probability_percent"],
         "model_info": model_info,
         "explanations": explanations,
         "indicators": indicators,
