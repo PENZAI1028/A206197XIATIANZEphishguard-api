@@ -12,9 +12,9 @@ CORS(app)
 
 model = joblib.load("phishing_web_model.pkl")
 
-API_VERSION = "1.2"
+API_VERSION = "1.3"
 MODEL_NAME = "Random Forest Classifier"
-SCORE_METHOD = "Weighted Explainable Scoring with Look-alike Domain Detection"
+SCORE_METHOD = "Weighted Explainable Scoring with Official-Domain Correction"
 
 OFFICIAL_DOMAINS = {
     "google": ["google.com", "google.com.my"],
@@ -238,7 +238,7 @@ def analyse_url(url):
     else:
         ai_explanation = f"The trained AI model estimates phishing probability at {ai_phishing_probability:.2f}."
 
-    indicators.append(indicator(
+    ai_indicator = indicator(
         "aiModelProbability",
         ai_score,
         "danger" if ai_score >= 70 else "warning" if ai_score >= 40 else "safe",
@@ -249,10 +249,11 @@ def analyse_url(url):
             "adjusted_ai_risk_score": ai_score,
             "confidence": round(ai_confidence, 4),
             "confidence_percent": round(ai_confidence * 100, 2),
-            "model_classes": list(model.classes_) if hasattr(model, "classes_") else None
+            "model_classes": [int(cls) for cls in model.classes_] if hasattr(model, "classes_") else None
         },
         "35%"
-    ))
+    )
+    indicators.append(ai_indicator)
 
     brand_score = 0
     brand_reason = "No brand impersonation was detected."
@@ -442,7 +443,7 @@ def analyse_url(url):
 
     length_score = min(100, length_score)
 
-    indicators.append(indicator(
+    length_indicator = indicator(
         "urlLengthComplexity",
         length_score,
         "danger" if length_score >= 70 else "warning" if length_score >= 40 else "safe",
@@ -452,7 +453,44 @@ def analyse_url(url):
             "special_characters": special_count
         },
         "5%"
-    ))
+    )
+    indicators.append(length_indicator)
+
+    official_clean = (
+        official_domain
+        and not critical
+        and brand_score == 0
+        and homograph_score == 0
+        and structure_score == 0
+        and keyword_score == 0
+        and ssl_score == 0
+    )
+
+    if official_clean:
+        ai_score = 0
+        length_score = 0
+
+        ai_indicator.update({
+            "score": 0,
+            "risk_points": 0,
+            "safety_score": 100,
+            "status": "safe",
+            "explanation": (
+                "AI risk was suppressed because the hostname is a verified official domain "
+                "and no URL-level phishing indicators were detected."
+            )
+        })
+
+        length_indicator.update({
+            "score": 0,
+            "risk_points": 0,
+            "safety_score": 100,
+            "status": "safe",
+            "explanation": (
+                "URL length is accepted because this is a verified official service URL "
+                "with no phishing structure indicators."
+            )
+        })
 
     reputation_score = 0
     reputation_status = "safe"
@@ -493,7 +531,9 @@ def analyse_url(url):
         risk_score = max(risk_score, 95)
 
     if official_domain and not critical:
-        if brand_score == 0 and homograph_score == 0 and structure_score < 70:
+        if official_clean:
+            risk_score = 0
+        elif brand_score == 0 and homograph_score == 0 and structure_score < 70:
             risk_score = min(risk_score, 20)
 
     risk_score = max(0, min(100, risk_score))
