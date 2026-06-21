@@ -21,9 +21,10 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "2.0"
+API_VERSION = "2.1"
 MODEL_NAME = "Random Forest Classifier"
-SCORE_METHOD = "Weighted Explainable Scoring + Homograph Override"
+SCORE_METHOD = "Weighted Explainable Scoring + Calibrated AI Probability"
+AI_WEIGHT = 0.18
 
 # =========================
 # Official domains / protected brands
@@ -386,6 +387,13 @@ def get_phishing_probability(features):
 
     except Exception:
         return 0.0, 1.0
+
+
+def calibrate_ai_probability(raw_probability):
+    """Smooth Random Forest vote probabilities so the display is not a hard 0/100 switch."""
+    estimator_count = len(model.estimators_) if model is not None and hasattr(model, "estimators_") else 100
+    calibrated = ((raw_probability * estimator_count) + 1) / (estimator_count + 2)
+    return float(max(0.01, min(0.99, calibrated)))
 
 
 def indicator(name, score, status, explanation, value=None, weight=None):
@@ -807,19 +815,25 @@ def analyse_url(url):
     # AI Model
     features = extract_url_features(url)
     raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features)
+    calibrated_ai_phishing_probability = calibrate_ai_probability(raw_ai_phishing_probability)
     raw_ai_score = int(round(raw_ai_phishing_probability * 100))
+    calibrated_ai_score = int(round(calibrated_ai_phishing_probability * 100))
 
     # For verified official domains, the AI score is kept in model_info,
     # but the effective risk is capped to prevent false positives like dashboard.render.com.
     if official_domain:
-        ai_score = min(raw_ai_score, 15)
+        ai_score = min(calibrated_ai_score, 15)
         ai_explanation = (
-            f"The trained AI model estimates phishing probability at "
-            f"{raw_ai_phishing_probability:.2f}. Official-domain verification caps the effective AI risk."
+            f"The trained AI model returned raw phishing probability {raw_ai_phishing_probability:.2f}; "
+            f"the calibrated AI score is {calibrated_ai_score}/100. "
+            f"Official-domain verification caps the effective AI risk."
         )
     else:
-        ai_score = raw_ai_score
-        ai_explanation = f"The trained AI model estimates phishing probability at {raw_ai_phishing_probability:.2f}."
+        ai_score = calibrated_ai_score
+        ai_explanation = (
+            f"The trained AI model returned raw phishing probability {raw_ai_phishing_probability:.2f}; "
+            f"the calibrated AI risk score used for weighting is {ai_score}/100."
+        )
 
     indicators.append(indicator(
         "aiModelProbability",
@@ -827,13 +841,22 @@ def analyse_url(url):
         "danger" if ai_score >= 70 else "warning" if ai_score >= 35 else "safe",
         ai_explanation,
         {
-            "phishing_probability": round(raw_ai_phishing_probability, 4),
-            "phishing_probability_percent": round(raw_ai_phishing_probability * 100, 2),
+            "phishing_probability": round(calibrated_ai_phishing_probability, 4),
+            "phishing_probability_percent": round(calibrated_ai_phishing_probability * 100, 2),
+            "calibrated_phishing_probability": round(calibrated_ai_phishing_probability, 4),
+            "calibrated_phishing_probability_percent": round(calibrated_ai_phishing_probability * 100, 2),
+            "raw_phishing_probability": round(raw_ai_phishing_probability, 4),
+            "raw_phishing_probability_percent": round(raw_ai_phishing_probability * 100, 2),
+            "raw_ai_risk_score": raw_ai_score,
+            "calibrated_ai_risk_score": calibrated_ai_score,
             "effective_ai_risk_percent": ai_score,
+            "adjusted_ai_risk_score": ai_score,
+            "weight_percent": int(AI_WEIGHT * 100),
+            "weighted_contribution_points": round(ai_score * AI_WEIGHT, 2),
             "confidence": round(ai_confidence, 4),
             "confidence_percent": round(ai_confidence * 100, 2)
         },
-        "18%"
+        f"{int(AI_WEIGHT * 100)}%"
     ))
 
     brand_indicator = detect_brand_impersonation(domain)
@@ -862,6 +885,37 @@ def analyse_url(url):
     length_score = score_by_name.get("urlLengthComplexity", 0)
     official_score = score_by_name.get("officialDomain", 0)
 
+    official_clean = (
+        official_domain
+        and official_score == 0
+        and brand_score == 0
+        and homograph_score == 0
+        and structure_score == 0
+        and keyword_score == 0
+        and ssl_score == 0
+    )
+
+    if official_clean:
+        ai_score = 0
+        score_by_name["aiModelProbability"] = 0
+
+        for item in indicators:
+            if item["name"] == "aiModelProbability":
+                item["score"] = 0
+                item["risk_points"] = 0
+                item["safety_score"] = 100
+                item["status"] = "safe"
+                item["explanation"] = (
+                    "The raw AI probability is shown for transparency, but effective AI risk is set to 0 "
+                    "because the hostname is a verified official domain and no URL-level phishing indicators were detected."
+                )
+                if isinstance(item.get("value"), dict):
+                    item["value"]["effective_ai_risk_percent"] = 0
+                    item["value"]["adjusted_ai_risk_score"] = 0
+                    item["value"]["weighted_contribution_points"] = 0
+                    item["value"]["official_domain_correction"] = True
+                break
+
     # Internal Reputation Indicator
     reputation_score = 0
     reputation_status = "safe"
@@ -882,7 +936,7 @@ def analyse_url(url):
 
     weights = {
         "officialDomain": 0.12,
-        "aiModelProbability": 0.18,
+        "aiModelProbability": AI_WEIGHT,
         "brandVerification": 0.20,
         "homographAttack": 0.20,
         "urlStructure": 0.10,
@@ -958,9 +1012,16 @@ def analyse_url(url):
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
         "model_load_error": MODEL_LOAD_ERROR,
-        "ai_phishing_probability": round(raw_ai_phishing_probability, 4),
-        "ai_phishing_probability_percent": round(raw_ai_phishing_probability * 100, 2),
+        "ai_phishing_probability": round(calibrated_ai_phishing_probability, 4),
+        "ai_phishing_probability_percent": round(calibrated_ai_phishing_probability * 100, 2),
+        "raw_ai_phishing_probability": round(raw_ai_phishing_probability, 4),
+        "raw_ai_phishing_probability_percent": round(raw_ai_phishing_probability * 100, 2),
+        "calibrated_ai_phishing_probability": round(calibrated_ai_phishing_probability, 4),
+        "calibrated_ai_phishing_probability_percent": round(calibrated_ai_phishing_probability * 100, 2),
         "effective_ai_risk_percent": ai_score,
+        "adjusted_ai_risk_score": ai_score,
+        "ai_weight_percent": int(AI_WEIGHT * 100),
+        "ai_weighted_contribution_points": round(ai_score * AI_WEIGHT, 2),
         "ai_confidence": round(ai_confidence, 4),
         "ai_confidence_percent": round(ai_confidence * 100, 2),
         "official_domain": official_domain,
@@ -1060,6 +1121,13 @@ def predict():
         "confidence": model_info["ai_confidence_percent"],
         "ai_phishing_probability": model_info["ai_phishing_probability"],
         "ai_phishing_probability_percent": model_info["ai_phishing_probability_percent"],
+        "raw_ai_phishing_probability": model_info["raw_ai_phishing_probability"],
+        "raw_ai_phishing_probability_percent": model_info["raw_ai_phishing_probability_percent"],
+        "calibrated_ai_phishing_probability": model_info["calibrated_ai_phishing_probability"],
+        "calibrated_ai_phishing_probability_percent": model_info["calibrated_ai_phishing_probability_percent"],
+        "adjusted_ai_risk_score": model_info["adjusted_ai_risk_score"],
+        "ai_weight_percent": model_info["ai_weight_percent"],
+        "ai_weighted_contribution_points": model_info["ai_weighted_contribution_points"],
         "model_info": model_info,
         "explanations": explanations,
         "indicators": indicators,
