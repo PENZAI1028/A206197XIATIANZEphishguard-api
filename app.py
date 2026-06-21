@@ -12,9 +12,16 @@ CORS(app)
 
 model = joblib.load("phishing_web_model.pkl")
 
-API_VERSION = "1.3"
+API_VERSION = "1.4"
 MODEL_NAME = "Random Forest Classifier"
-SCORE_METHOD = "Weighted Explainable Scoring with Official-Domain Correction"
+SCORE_METHOD = "Weighted Explainable Scoring with Calibrated AI Probability"
+AI_WEIGHT = 0.35
+BRAND_WEIGHT = 0.25
+HOMOGRAPH_WEIGHT = 0.10
+STRUCTURE_WEIGHT = 0.10
+KEYWORD_WEIGHT = 0.10
+SSL_WEIGHT = 0.05
+LENGTH_WEIGHT = 0.05
 
 OFFICIAL_DOMAINS = {
     "google": ["google.com", "google.com.my"],
@@ -177,6 +184,13 @@ def get_phishing_probability(features):
     confidence = float(max(probability))
 
     return phishing_probability, confidence
+
+
+def calibrate_ai_probability(raw_probability):
+    """Smooth Random Forest vote probabilities so the UI does not look like a 0/100 switch."""
+    estimator_count = len(model.estimators_) if hasattr(model, "estimators_") else 100
+    calibrated = ((raw_probability * estimator_count) + 1) / (estimator_count + 2)
+    return float(max(0.01, min(0.99, calibrated)))
 
 
 def indicator(name, score, status, explanation, value=None, weight=None):
