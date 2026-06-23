@@ -21,7 +21,7 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "2.4"
+API_VERSION = "2.6"
 MODEL_NAME = "Enhanced Extra Trees URL Classifier"
 SCORE_METHOD = "Weighted Explainable Scoring + Calibrated AI-Assisted Probability"
 AI_WEIGHT = 0.18
@@ -39,6 +39,12 @@ OFFICIAL_DOMAINS = {
     ],
     "render": [
         "render.com", "dashboard.render.com", "onrender.com"
+    ],
+    "figma": [
+        "figma.com"
+    ],
+    "cisco": [
+        "cisco.com", "webex.com"
     ],
     "apple": [
         "apple.com", "icloud.com"
@@ -89,6 +95,21 @@ OFFICIAL_DOMAINS = {
     "tng": [
         "touchngo.com.my", "tngdigital.com.my"
     ]
+}
+
+# Some official hosts should be matched exactly only. For example,
+# "dashb0ard.render.com" is under render.com but visually imitates
+# "dashboard.render.com", so it must not be trusted just because the
+# parent domain is official.
+EXACT_ONLY_OFFICIAL_DOMAINS = {
+    "render.com",
+    "dashboard.render.com"
+}
+
+SHORTENER_DOMAINS = {
+    "goo.su", "bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly",
+    "rebrand.ly", "shorturl.at", "ow.ly", "buff.ly", "s.id",
+    "lnkd.in", "tiny.cc", "rb.gy"
 }
 
 SUSPICIOUS_KEYWORDS = [
@@ -160,6 +181,19 @@ CONFUSABLE_MAP = {
 
     # g / 9
     "9": "g", "g": "g", "G": "g",
+
+    # common cross-script confusables
+    "а": "a", "А": "a", "α": "a", "Α": "a",
+    "с": "c", "С": "c", "ϲ": "c", "¢": "c",
+    "е": "e", "Е": "e", "є": "e",
+    "р": "p", "Р": "p",
+    "х": "x", "Х": "x",
+    "у": "y", "У": "y",
+    "һ": "h", "Н": "h", "н": "h",
+    "к": "k", "К": "k",
+    "м": "m", "М": "m",
+    "ν": "v", "ѵ": "v",
+    "ʏ": "y",
 }
 
 
@@ -167,7 +201,10 @@ CONFUSABLE_MAP = {
 # Basic URL helpers
 # =========================
 def normalize_url(url):
-    url = str(url or "").strip()
+    url = unicodedata.normalize("NFKC", str(url or "")).strip()
+    url = re.sub(r"\s+", "", url)
+    url = re.sub(r"[\s,;\u3001\u3002]+$", "", url)
+    url = re.sub(r"^(https?)\?//", r"\1://", url, flags=re.IGNORECASE)
 
     if not url:
         return ""
@@ -265,6 +302,16 @@ def is_same_or_subdomain(domain, official):
     return domain == official or domain.endswith("." + official)
 
 
+def is_official_domain_match(domain, official):
+    domain = strip_www(domain)
+    official = strip_www(official)
+
+    if official in EXACT_ONLY_OFFICIAL_DOMAINS:
+        return domain == official
+
+    return is_same_or_subdomain(domain, official)
+
+
 def normalize_confusable(text):
     if not text:
         return ""
@@ -315,7 +362,7 @@ def domain_is_official(domain):
     for brand, domains in OFFICIAL_DOMAINS.items():
         for official in domains:
             official = strip_www(official)
-            if is_same_or_subdomain(domain, official):
+            if is_official_domain_match(domain, official):
                 return True, brand, official
 
     return False, None, None
@@ -330,13 +377,106 @@ def domain_skeleton_matches_official(domain):
             official = strip_www(official)
             official_skeleton = normalize_confusable(official)
 
-            if is_same_or_subdomain(domain_skeleton, official_skeleton):
+            if is_official_domain_match(domain_skeleton, official_skeleton):
                 official_raw, _, _ = domain_is_official(domain)
 
                 if not official_raw:
                     return True, brand, official
 
     return False, None, None
+
+
+def is_shortener_domain(domain):
+    domain = strip_www(domain)
+    return any(domain == shortener or domain.endswith("." + shortener) for shortener in SHORTENER_DOMAINS)
+
+
+def protected_brand_terms():
+    terms = []
+
+    for brand, domains in OFFICIAL_DOMAINS.items():
+        brand_term = normalize_confusable(brand)
+        if len(brand_term) >= 4:
+            terms.append((brand, brand_term, brand))
+
+        for official in domains:
+            official_sld = normalize_confusable(get_sld(official))
+            if len(official_sld) >= 4:
+                terms.append((brand, official_sld, official))
+
+    unique_terms = {}
+    for brand, term, source in terms:
+        unique_terms[(brand, term)] = source
+
+    return [
+        {"brand": brand, "term": term, "source": source}
+        for (brand, term), source in unique_terms.items()
+    ]
+
+
+def find_brand_like_token(text, min_ratio=0.88):
+    skeleton = normalize_confusable(text)
+    tokens = [
+        token
+        for token in re.split(r"[^a-z0-9]+", skeleton)
+        if len(token) >= 4
+    ]
+
+    for token in tokens:
+        for entry in protected_brand_terms():
+            term = entry["term"]
+
+            if abs(len(token) - len(term)) > max(2, int(len(term) * 0.35)):
+                continue
+
+            if token == term or (len(term) >= 5 and term in token):
+                return {
+                    "brand": entry["brand"],
+                    "matched_token": token,
+                    "matched_term": term,
+                    "source": entry["source"],
+                    "distance": 0,
+                    "similarity": 1.0
+                }
+
+            distance = levenshtein_distance(token, term)
+            ratio = similarity_ratio(token, term)
+            max_distance = 1 if len(term) <= 6 else 2
+
+            if distance <= max_distance or ratio >= min_ratio:
+                return {
+                    "brand": entry["brand"],
+                    "matched_token": token,
+                    "matched_term": term,
+                    "source": entry["source"],
+                    "distance": distance,
+                    "similarity": round(ratio, 3)
+                }
+
+    return None
+
+
+def domain_brand_similarity_features(domain):
+    official, _, _ = domain_is_official(domain)
+    domain_root = get_root_domain(domain)
+    domain_sld_skeleton = normalize_confusable(get_sld(domain_root))
+
+    min_distance = 10
+    max_similarity = 0.0
+    lookalike = 0
+
+    for entry in protected_brand_terms():
+        term = entry["term"]
+        distance = levenshtein_distance(domain_sld_skeleton, term)
+        ratio = similarity_ratio(domain_sld_skeleton, term)
+        min_distance = min(min_distance, distance)
+        max_similarity = max(max_similarity, ratio)
+
+        max_distance = 1 if len(term) <= 6 else 2
+        if not official and domain_sld_skeleton != term and (distance <= max_distance or ratio >= 0.90):
+            lookalike = 1
+
+    return lookalike, min_distance, round(max_similarity * 100, 2)
 
 
 # =========================
@@ -346,7 +486,16 @@ def extract_url_features(url):
     url = normalize_url(url)
     lower = url.lower()
     parsed = urlparse(url)
+    parsed_data = parse_url(url)
+    domain = parsed_data["domain"]
+    path = parsed_data["path"]
+    query = parsed_data["query"]
     brands = list(OFFICIAL_DOMAINS.keys())
+    url_skeleton = normalize_confusable(lower)
+    official_flag = 1 if domain_is_official(domain)[0] else 0
+    domain_lookalike_flag, min_brand_distance, max_brand_similarity = domain_brand_similarity_features(domain)
+    shortener_flag = 1 if is_shortener_domain(domain) else 0
+    shortener_brand_path_flag = 1 if shortener_flag and find_brand_like_token(f"{path} {query}") else 0
 
     # Feature layout must match train_web_model.py.
     return [[
@@ -364,7 +513,14 @@ def extract_url_features(url):
         len(re.findall(r"[^a-zA-Z0-9]", url)),
         1 if re.search(r"(\d{1,3}\.){3}\d{1,3}", url) else 0,
         sum(word in lower for word in SUSPICIOUS_KEYWORDS),
-        sum(brand in lower for brand in brands)
+        sum(brand in lower for brand in brands),
+        sum(normalize_confusable(brand) in url_skeleton for brand in brands),
+        official_flag,
+        domain_lookalike_flag,
+        min_brand_distance,
+        max_brand_similarity,
+        shortener_flag,
+        shortener_brand_path_flag
     ]]
 
 
@@ -393,15 +549,23 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
     """Continuous lexical estimate used to calibrate over-confident Random Forest votes."""
     target = f"{domain} {path} {query}".lower()
     target_skeleton = normalize_confusable(target)
+    path_query = f"{path} {query}"
     tld = get_tld(domain)
     tld_skeleton = normalize_confusable(tld)
     root = get_root_domain(domain)
     sld = get_sld(root)
+    brand_path_match = find_brand_like_token(path_query)
 
     score = 4 if official_domain else 12
 
     if scheme != "https":
         score += 12
+
+    if is_shortener_domain(domain):
+        score += 22
+
+        if brand_path_match:
+            score += 48
 
     if re.search(r"(\d{1,3}\.){3}\d{1,3}", domain):
         score += 36
@@ -434,6 +598,24 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
                 score += 22
                 break
 
+        domain_root = get_root_domain(domain)
+        domain_sld_skeleton = normalize_confusable(get_sld(domain_root))
+
+        for _, official_list in OFFICIAL_DOMAINS.items():
+            for official in official_list:
+                official_root = get_root_domain(official)
+
+                if domain_root == official_root:
+                    continue
+
+                official_sld_skeleton = normalize_confusable(get_sld(official_root))
+                distance = levenshtein_distance(domain_sld_skeleton, official_sld_skeleton)
+                ratio = similarity_ratio(domain_sld_skeleton, official_sld_skeleton)
+
+                if distance == 1 or ratio >= 0.90:
+                    score += 60
+                    break
+
     digit_ratio = (sum(char.isdigit() for char in sld) / len(sld)) if sld else 0
     if digit_ratio >= 0.30:
         score += 12
@@ -464,7 +646,9 @@ def calibrate_ai_probability(raw_probability, feature_probability):
     estimator_count = len(model.estimators_) if model is not None and hasattr(model, "estimators_") else 100
     smoothed_model_probability = ((raw_probability * estimator_count) + 1) / (estimator_count + 2)
 
-    if raw_probability <= 0.02 or raw_probability >= 0.98:
+    if raw_probability <= 0.50 and feature_probability >= 0.70:
+        calibrated = (feature_probability * 0.85) + (smoothed_model_probability * 0.15)
+    elif raw_probability <= 0.02 or raw_probability >= 0.98:
         calibrated = (feature_probability * 0.70) + (smoothed_model_probability * 0.30)
     else:
         calibrated = (feature_probability * 0.40) + (smoothed_model_probability * 0.60)
@@ -530,7 +714,7 @@ def detect_official_domain(domain):
     )
 
 
-def detect_brand_impersonation(domain):
+def detect_brand_impersonation(domain, path="", query=""):
     official, official_brand, official_matched = domain_is_official(domain)
 
     if official:
@@ -584,6 +768,29 @@ def detect_brand_impersonation(domain):
                     },
                     "20%"
                 )
+
+    if is_shortener_domain(domain):
+        brand_path_match = find_brand_like_token(f"{path} {query}")
+
+        if brand_path_match:
+            return indicator(
+                "brandVerification",
+                95,
+                "danger",
+                (
+                    "Known URL shortener contains a look-alike protected brand in the redirect path. "
+                    f"Matched '{brand_path_match['matched_token']}' to '{brand_path_match['source']}'."
+                ),
+                {
+                    "shortener_domain": domain,
+                    "matched_brand": brand_path_match["brand"],
+                    "matched_token": brand_path_match["matched_token"],
+                    "matched_term": brand_path_match["matched_term"],
+                    "similarity": brand_path_match["similarity"],
+                    "distance": brand_path_match["distance"]
+                },
+                "20%"
+            )
 
     return indicator(
         "brandVerification",
@@ -697,6 +904,17 @@ def detect_url_structure(url, domain, scheme, path, query):
 
     structure_score = 0
     structure_reasons = []
+    brand_path_match = find_brand_like_token(f"{path} {query}")
+
+    if is_shortener_domain(domain):
+        structure_score += 45
+        structure_reasons.append("Known URL shortener hides the final destination")
+
+        if brand_path_match:
+            structure_score += 60
+            structure_reasons.append(
+                f"Short link path contains look-alike brand token '{brand_path_match['matched_token']}'"
+            )
 
     if "@" in url:
         structure_score += 100
@@ -948,7 +1166,7 @@ def analyse_url(url):
         f"{int(AI_WEIGHT * 100)}%"
     ))
 
-    brand_indicator = detect_brand_impersonation(domain)
+    brand_indicator = detect_brand_impersonation(domain, path, query)
     homograph_indicator = detect_homograph_attack(domain)
     structure_indicator = detect_url_structure(url, domain, scheme, path, query)
     keyword_indicator = detect_suspicious_keywords(domain, path, query)
@@ -1061,6 +1279,9 @@ def analyse_url(url):
 
     if structure_score >= 90:
         critical_reasons.append("critical URL structure issue")
+
+    if is_shortener_domain(domain) and brand_score >= 90:
+        critical_reasons.append("shortened URL contains look-alike brand")
 
     if brand_score >= 90 and keyword_score >= 40:
         critical_reasons.append("brand name combined with phishing keyword")
