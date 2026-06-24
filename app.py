@@ -21,7 +21,7 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "2.6"
+API_VERSION = "2.7"
 MODEL_NAME = "Enhanced Extra Trees URL Classifier"
 SCORE_METHOD = "Weighted Explainable Scoring + Calibrated AI-Assisted Probability"
 AI_WEIGHT = 0.18
@@ -78,7 +78,8 @@ OFFICIAL_DOMAINS = {
         "openai.com", "chatgpt.com"
     ],
     "ukm": [
-        "ukm.my"
+        "ukm.my", "ukmfolio.ukm.my", "fism.ukm.my", "ftsm.ukm.my",
+        "siswa.ukm.edu.my"
     ],
     "maybank": [
         "maybank2u.com.my", "maybank.com"
@@ -104,6 +105,13 @@ OFFICIAL_DOMAINS = {
 EXACT_ONLY_OFFICIAL_DOMAINS = {
     "render.com",
     "dashboard.render.com"
+}
+
+PROTECTED_SERVICE_LABELS = {
+    "account", "accounts", "auth", "billing", "dashboard", "email", "elearning",
+    "fism", "ftsm", "helpdesk", "lms", "login", "mail", "moodle", "my",
+    "payment", "portal", "secure", "security", "service", "signin", "siswa",
+    "support", "ukmfolio", "verify", "webmail"
 }
 
 SHORTENER_DOMAINS = {
@@ -302,12 +310,58 @@ def is_same_or_subdomain(domain, official):
     return domain == official or domain.endswith("." + official)
 
 
+def subdomain_labels_before_official(domain, official):
+    domain = strip_www(domain)
+    official = strip_www(official)
+
+    if domain == official or not domain.endswith("." + official):
+        return []
+
+    prefix = domain[:-(len(official) + 1)]
+    return [label for label in prefix.split(".") if label]
+
+
+def has_ascii_lookalike_marker(label):
+    return bool(re.search(r"[01345789@!|$]", label or ""))
+
+
+def suspicious_unverified_official_subdomain(domain, official):
+    suspicious = []
+
+    for label in subdomain_labels_before_official(domain, official):
+        if not has_ascii_lookalike_marker(label):
+            continue
+
+        label_skeleton = normalize_confusable(label)
+
+        for service_label in PROTECTED_SERVICE_LABELS:
+            service_skeleton = normalize_confusable(service_label)
+            distance = levenshtein_distance(label_skeleton, service_skeleton)
+            similarity = similarity_ratio(label_skeleton, service_skeleton)
+
+            if label_skeleton == service_skeleton or distance <= 1 or similarity >= 0.88:
+                suspicious.append({
+                    "label": label,
+                    "label_skeleton": label_skeleton,
+                    "matched_service": service_label,
+                    "matched_service_skeleton": service_skeleton,
+                    "distance": distance,
+                    "similarity": round(similarity, 2)
+                })
+                break
+
+    return suspicious
+
+
 def is_official_domain_match(domain, official):
     domain = strip_www(domain)
     official = strip_www(official)
 
     if official in EXACT_ONLY_OFFICIAL_DOMAINS:
         return domain == official
+
+    if suspicious_unverified_official_subdomain(domain, official):
+        return False
 
     return is_same_or_subdomain(domain, official)
 
@@ -366,6 +420,20 @@ def domain_is_official(domain):
                 return True, brand, official
 
     return False, None, None
+
+
+def find_suspicious_official_subdomain(domain):
+    domain = strip_www(domain)
+
+    for brand, domains in OFFICIAL_DOMAINS.items():
+        for official in domains:
+            official = strip_www(official)
+            suspicious_labels = suspicious_unverified_official_subdomain(domain, official)
+
+            if suspicious_labels:
+                return True, brand, official, suspicious_labels
+
+    return False, None, None, []
 
 
 def domain_skeleton_matches_official(domain):
@@ -687,6 +755,26 @@ def detect_official_domain(domain):
             "12%"
         )
 
+    suspicious_subdomain, suspicious_brand, parent_domain, suspicious_labels = find_suspicious_official_subdomain(domain)
+
+    if suspicious_subdomain:
+        return indicator(
+            "officialDomain",
+            95,
+            "danger",
+            (
+                "Suspicious unverified subdomain under a protected official domain. "
+                "The subdomain uses look-alike character substitution for a protected service name."
+            ),
+            {
+                "domain": domain,
+                "protected_parent_domain": parent_domain,
+                "matched_brand": suspicious_brand,
+                "suspicious_labels": suspicious_labels
+            },
+            "12%"
+        )
+
     skeleton_match, skeleton_brand, skeleton_official = domain_skeleton_matches_official(domain)
 
     if skeleton_match:
@@ -812,6 +900,26 @@ def detect_homograph_attack(domain):
             "safe",
             "No look-alike issue was detected because the domain is verified as official.",
             domain,
+            "20%"
+        )
+
+    suspicious_subdomain, suspicious_brand, parent_domain, suspicious_labels = find_suspicious_official_subdomain(domain)
+
+    if suspicious_subdomain:
+        return indicator(
+            "homographAttack",
+            95,
+            "danger",
+            (
+                "Look-alike subdomain detected under a protected official parent domain. "
+                "This pattern is commonly used to impersonate trusted institutional services."
+            ),
+            {
+                "domain": domain,
+                "protected_parent_domain": parent_domain,
+                "matched_brand": suspicious_brand,
+                "suspicious_labels": suspicious_labels
+            },
             "20%"
         )
 
