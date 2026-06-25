@@ -21,7 +21,7 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "2.7"
+API_VERSION = "2.8"
 MODEL_NAME = "Enhanced Extra Trees URL Classifier"
 SCORE_METHOD = "Weighted Explainable Scoring + Calibrated AI-Assisted Probability"
 AI_WEIGHT = 0.18
@@ -211,8 +211,19 @@ CONFUSABLE_MAP = {
 def normalize_url(url):
     url = unicodedata.normalize("NFKC", str(url or "")).strip()
     url = re.sub(r"\s+", "", url)
-    url = re.sub(r"[\s,;\u3001\u3002]+$", "", url)
+    url = re.sub(r"[\s,;，；\u3001\u3002]+$", "", url)
+    url = re.sub(r"^[\.,;，；\u3002]+(?=https?[:?]//)", "", url, flags=re.IGNORECASE)
     url = re.sub(r"^(https?)\?//", r"\1://", url, flags=re.IGNORECASE)
+    url = re.sub(r"^(https?):/+", r"\1://", url, flags=re.IGNORECASE)
+
+    # Recover scheme-smuggling mistakes produced by copy/paste or front-end auto-prefixing:
+    # ".https://goo.su/..." -> "https://goo.su/..."
+    # "https://https://goo.su/..." -> "https://goo.su/..."
+    # "https://.https://goo.su/..." -> "https://goo.su/..."
+    previous = None
+    while previous != url:
+        previous = url
+        url = re.sub(r"^https?://[\.,;，；\u3002]*(https?://)", r"\1", url, flags=re.IGNORECASE)
 
     if not url:
         return ""
@@ -527,7 +538,8 @@ def find_brand_like_token(text, min_ratio=0.88):
 def domain_brand_similarity_features(domain):
     official, _, _ = domain_is_official(domain)
     domain_root = get_root_domain(domain)
-    domain_sld_skeleton = normalize_confusable(get_sld(domain_root))
+    domain_sld = get_sld(domain_root)
+    domain_sld_skeleton = normalize_confusable(domain_sld)
 
     min_distance = 10
     max_similarity = 0.0
@@ -541,7 +553,10 @@ def domain_brand_similarity_features(domain):
         max_similarity = max(max_similarity, ratio)
 
         max_distance = 1 if len(term) <= 6 else 2
-        if not official and domain_sld_skeleton != term and (distance <= max_distance or ratio >= 0.90):
+        exact_confusable_match = domain_sld_skeleton == term and domain_sld != term
+        near_brand_match = domain_sld_skeleton != term and (distance <= max_distance or ratio >= 0.90)
+
+        if not official and (exact_confusable_match or near_brand_match):
             lookalike = 1
 
     return lookalike, min_distance, round(max_similarity * 100, 2)
