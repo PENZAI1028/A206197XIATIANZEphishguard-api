@@ -21,10 +21,50 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "2.8"
+API_VERSION = "2.9"
 MODEL_NAME = "Enhanced Extra Trees URL Classifier"
-SCORE_METHOD = "Weighted Explainable Scoring + Calibrated AI-Assisted Probability"
+SCORE_METHOD = "Auditable 9-Indicator Weighted Scoring + Calibrated AI Probability"
 AI_WEIGHT = 0.18
+
+MODEL_FEATURE_NAMES = [
+    "url_length",
+    "uses_https",
+    "netloc_length",
+    "path_length",
+    "dot_count",
+    "hyphen_count",
+    "at_count",
+    "question_count",
+    "equals_count",
+    "slash_count",
+    "digit_count",
+    "special_character_count",
+    "ip_address_flag",
+    "suspicious_keyword_count",
+    "brand_literal_count",
+    "brand_confusable_count",
+    "official_domain_flag",
+    "domain_lookalike_flag",
+    "minimum_brand_distance",
+    "maximum_brand_similarity",
+    "shortener_domain_flag",
+    "shortener_brand_path_flag"
+]
+
+# Every indicator shown by the API has a real, non-zero role in the weighted score.
+# The weights sum to 1.00. Critical and official-domain rules are applied afterwards
+# and are reported separately in the score audit.
+INDICATOR_WEIGHTS = {
+    "officialDomain": 0.10,
+    "aiModelProbability": AI_WEIGHT,
+    "brandVerification": 0.18,
+    "homographAttack": 0.18,
+    "urlStructure": 0.10,
+    "suspiciousKeywords": 0.10,
+    "sslCertificate": 0.05,
+    "urlLengthComplexity": 0.05,
+    "domainReputation": 0.06
+}
 
 # =========================
 # Official domains / protected brands
@@ -607,9 +647,39 @@ def extract_url_features(url):
     ]]
 
 
+def build_model_feature_audit(features):
+    values = list(features[0])
+    importances = getattr(model, "feature_importances_", None)
+
+    if len(values) != len(MODEL_FEATURE_NAMES):
+        raise RuntimeError(
+            f"Feature contract mismatch: extracted {len(values)} values for "
+            f"{len(MODEL_FEATURE_NAMES)} feature names."
+        )
+
+    if hasattr(model, "n_features_in_") and int(model.n_features_in_) != len(values):
+        raise RuntimeError(
+            f"Model contract mismatch: model expects {model.n_features_in_} features, "
+            f"but the API extracted {len(values)}."
+        )
+
+    audit = []
+    for index, (name, value) in enumerate(zip(MODEL_FEATURE_NAMES, values)):
+        importance = float(importances[index]) if importances is not None else None
+        audit.append({
+            "name": name,
+            "value": value,
+            "used_by_model": True,
+            "model_importance": round(importance, 8) if importance is not None else None,
+            "model_importance_percent": round(importance * 100, 4) if importance is not None else None
+        })
+
+    return audit
+
+
 def get_phishing_probability(features):
     if model is None:
-        return 0.0, 1.0
+        raise RuntimeError(f"AI model is unavailable: {MODEL_LOAD_ERROR or 'unknown loading error'}")
 
     try:
         probability = model.predict_proba(features)[0]
@@ -624,8 +694,8 @@ def get_phishing_probability(features):
 
         return phishing_probability, confidence
 
-    except Exception:
-        return 0.0, 1.0
+    except Exception as exc:
+        raise RuntimeError(f"AI model prediction failed: {exc}") from exc
 
 
 def estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain):
@@ -1210,6 +1280,70 @@ def detect_url_length_complexity(url, domain):
     )
 
 
+def detect_domain_reputation(domain):
+    """Score transparent local reputation evidence without claiming an external lookup."""
+    official, _, matched = domain_is_official(domain)
+    evidence = []
+    score = 0
+
+    if official:
+        return indicator(
+            "domainReputation",
+            0,
+            "safe",
+            f"Local reputation check matched verified official domain '{matched}'.",
+            {
+                "domain": domain,
+                "source": "verified official-domain allowlist",
+                "matched_entry": matched
+            },
+            "6%"
+        )
+
+    if is_shortener_domain(domain):
+        score = max(score, 70)
+        evidence.append("domain is listed as a URL-shortening or redirect service")
+
+    if re.search(r"(\d{1,3}\.){3}\d{1,3}", domain):
+        score = max(score, 90)
+        evidence.append("host is an IP address rather than a registered domain name")
+
+    if "xn--" in domain:
+        score = max(score, 95)
+        evidence.append("Punycode hostname requires homograph review")
+
+    tld = get_tld(domain)
+    tld_skeleton = normalize_confusable(tld)
+
+    if tld in BAD_TLDS:
+        score = max(score, BAD_TLDS[tld])
+        evidence.append(f".{tld} is present in the local high-risk TLD table")
+
+    if tld != tld_skeleton and tld_skeleton in COMMON_TLDS:
+        score = max(score, 95)
+        evidence.append(f".{tld} visually resembles common TLD .{tld_skeleton}")
+
+    status = "danger" if score >= 70 else "warning" if score >= 30 else "safe"
+    explanation = (
+        "Local reputation evidence: " + "; ".join(evidence) + "."
+        if evidence
+        else "No entry matched the API's local allowlist or high-risk reputation tables."
+    )
+
+    return indicator(
+        "domainReputation",
+        score,
+        status,
+        explanation,
+        {
+            "domain": domain,
+            "source": "local allowlist, redirect-service list, IP check, and high-risk TLD table",
+            "matched_evidence": evidence if evidence else "None"
+        },
+        "6%"
+    )
+
+
 # =========================
 # Main analysis
 # =========================
@@ -1231,6 +1365,7 @@ def analyse_url(url):
 
     # AI Model
     features = extract_url_features(url)
+    model_feature_audit = build_model_feature_audit(features)
     raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features)
     feature_ai_probability = estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain)
     calibrated_ai_phishing_probability = calibrate_ai_probability(
@@ -1284,7 +1419,18 @@ def analyse_url(url):
             "weight_percent": int(AI_WEIGHT * 100),
             "weighted_contribution_points": round(ai_score * AI_WEIGHT, 2),
             "confidence": round(ai_confidence, 4),
-            "confidence_percent": round(ai_confidence * 100, 2)
+            "confidence_percent": round(ai_confidence * 100, 2),
+            "model_feature_count": len(model_feature_audit),
+            "model_features_used_count": sum(
+                1 for item in model_feature_audit if item["used_by_model"]
+            ),
+            "model_feature_importance_sum_percent": round(
+                sum(
+                    item["model_importance_percent"] or 0
+                    for item in model_feature_audit
+                ),
+                2
+            )
         },
         f"{int(AI_WEIGHT * 100)}%"
     ))
@@ -1295,6 +1441,7 @@ def analyse_url(url):
     keyword_indicator = detect_suspicious_keywords(domain, path, query)
     ssl_indicator = detect_ssl_indicator(scheme)
     length_indicator = detect_url_length_complexity(url, domain)
+    reputation_indicator = detect_domain_reputation(domain)
 
     indicators.extend([
         brand_indicator,
@@ -1302,7 +1449,8 @@ def analyse_url(url):
         structure_indicator,
         keyword_indicator,
         ssl_indicator,
-        length_indicator
+        length_indicator,
+        reputation_indicator
     ])
 
     score_by_name = {item["name"]: item["score"] for item in indicators}
@@ -1314,6 +1462,7 @@ def analyse_url(url):
     ssl_score = score_by_name.get("sslCertificate", 0)
     length_score = score_by_name.get("urlLengthComplexity", 0)
     official_score = score_by_name.get("officialDomain", 0)
+    reputation_score = score_by_name.get("domainReputation", 0)
 
     official_clean = (
         official_domain
@@ -1323,6 +1472,7 @@ def analyse_url(url):
         and structure_score == 0
         and keyword_score == 0
         and ssl_score == 0
+        and reputation_score == 0
     )
 
     if official_clean:
@@ -1351,42 +1501,23 @@ def analyse_url(url):
                     item["value"]["official_domain_correction"] = True
                 break
 
-    # Internal Reputation Indicator
-    reputation_score = 0
-    reputation_status = "safe"
-    reputation_reason = "Internal reputation indicator shows no strong internal red flags."
-
-    if official_score >= 90 or brand_score >= 90 or homograph_score >= 90 or structure_score >= 90:
-        reputation_score = 75
-        reputation_status = "warning"
-        reputation_reason = "Internal reputation warning based on strong phishing indicators."
-
-    indicators.append(indicator(
-        "domainReputation",
-        reputation_score,
-        reputation_status,
-        reputation_reason,
-        None
-    ))
-
-    weights = {
-        "officialDomain": 0.12,
-        "aiModelProbability": AI_WEIGHT,
-        "brandVerification": 0.20,
-        "homographAttack": 0.20,
-        "urlStructure": 0.10,
-        "suspiciousKeywords": 0.10,
-        "sslCertificate": 0.05,
-        "urlLengthComplexity": 0.05
-    }
-
     weighted_score = 0
     for item in indicators:
         name = item["name"]
-        if name in weights:
-            weighted_score += item["score"] * weights[name]
+        weight = INDICATOR_WEIGHTS.get(name)
+        if weight is None:
+            raise RuntimeError(f"Displayed indicator '{name}' is not connected to the scoring formula.")
 
-    risk_score = int(round(weighted_score))
+        contribution = item["score"] * weight
+        item["used_in_final_score"] = True
+        item["weight"] = f"{weight * 100:g}%"
+        item["weight_percent"] = round(weight * 100, 2)
+        item["weighted_contribution_points"] = round(contribution, 2)
+        weighted_score += contribution
+
+    weighted_score_before_overrides = round(weighted_score, 2)
+    rounded_weighted_score = int(round(weighted_score_before_overrides))
+    risk_score = rounded_weighted_score
 
     # Critical override rules
     critical_reasons = []
@@ -1419,15 +1550,22 @@ def analyse_url(url):
         critical_reasons.append("IP address used as domain")
 
     critical = len(critical_reasons) > 0
+    applied_overrides = []
 
     if critical:
-        risk_score = max(risk_score, 90)
+        overridden_score = max(risk_score, 90)
+        if overridden_score != risk_score:
+            applied_overrides.append("critical risk floor: final risk raised to at least 90")
+        risk_score = overridden_score
 
     # Important false-positive control:
     # A verified official domain must not become high risk because of long path,
     # random service ID, dashboard URL, or AI-only uncertainty.
     if official_domain and not critical:
-        risk_score = min(risk_score, 10)
+        overridden_score = min(risk_score, 10)
+        if overridden_score != risk_score:
+            applied_overrides.append("verified official-domain cap: final risk limited to at most 10")
+        risk_score = overridden_score
 
     risk_score = max(0, min(100, risk_score))
     safety_score = 100 - risk_score
@@ -1470,7 +1608,20 @@ def analyse_url(url):
         "official_brand": official_brand,
         "official_matched_domain": official_matched,
         "domain_skeleton": normalize_confusable(domain),
-        "critical_reasons": critical_reasons
+        "critical_reasons": critical_reasons,
+        "model_features": model_feature_audit,
+        "model_feature_count": len(model_feature_audit),
+        "indicator_weights": {
+            name: round(weight * 100, 2)
+            for name, weight in INDICATOR_WEIGHTS.items()
+        },
+        "indicator_weight_total_percent": round(sum(INDICATOR_WEIGHTS.values()) * 100, 2),
+        "weighted_score_before_overrides": weighted_score_before_overrides,
+        "rounded_weighted_score": rounded_weighted_score,
+        "final_risk_score": risk_score,
+        "rounding_adjustment_points": round(rounded_weighted_score - weighted_score_before_overrides, 2),
+        "override_adjustment_points": risk_score - rounded_weighted_score,
+        "applied_overrides": applied_overrides
     }
 
     return risk_score, safety_score, decision, result, critical, indicators, model_info
@@ -1577,6 +1728,17 @@ def predict():
         "adjusted_ai_risk_score": model_info["adjusted_ai_risk_score"],
         "ai_weight_percent": model_info["ai_weight_percent"],
         "ai_weighted_contribution_points": model_info["ai_weighted_contribution_points"],
+        "model_features": model_info["model_features"],
+        "score_audit": {
+            "indicator_weights": model_info["indicator_weights"],
+            "indicator_weight_total_percent": model_info["indicator_weight_total_percent"],
+            "weighted_score_before_overrides": model_info["weighted_score_before_overrides"],
+            "rounded_weighted_score": model_info["rounded_weighted_score"],
+            "final_risk_score": model_info["final_risk_score"],
+            "rounding_adjustment_points": model_info["rounding_adjustment_points"],
+            "override_adjustment_points": model_info["override_adjustment_points"],
+            "applied_overrides": model_info["applied_overrides"]
+        },
         "model_info": model_info,
         "explanations": explanations,
         "indicators": indicators,
