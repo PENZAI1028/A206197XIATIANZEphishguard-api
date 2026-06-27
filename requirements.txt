@@ -1,8 +1,2 @@
-flask
-flask-cors
-joblib
-pandas
-numpy
-scikit-learn==1.8.0
-python-Levenshtein
-gunicorn
+-r phishguard/backend/requirements.txt
+

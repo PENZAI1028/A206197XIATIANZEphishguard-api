@@ -1,7 +1,21 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-venv/
-.env
-*.backup-*.pkl
+# Frontend dependencies and local caches
+front/node_modules/
+**/node_modules/
+
+# Python caches and local environments
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.venv/
+**/venv/
+
+# Local secrets and operating-system files
+**/.env
+**/.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+
+# Local model backups are not deployment artifacts
+phishguard/backend/phishing_web_model.backup-*.pkl
+
