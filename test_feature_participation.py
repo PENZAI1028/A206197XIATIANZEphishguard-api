@@ -71,18 +71,40 @@ class FeatureParticipationTests(unittest.TestCase):
                     payload["risk_score"]
                 )
 
-    def test_local_reputation_is_not_display_only(self):
-        payload = self.predict("https://goo.su/i.whatAapp")
-        reputation = next(
+    def test_https_usage_is_real_and_weighted(self):
+        https_payload = self.predict("https://example.com/login")
+        https_usage = next(
             item
-            for item in payload["indicators"]
-            if item["name"] == "domainReputation"
+            for item in https_payload["indicators"]
+            if item["name"] == "httpsUsage"
         )
+        self.assertEqual(https_usage["score"], 0)
+        self.assertTrue(https_usage["value"]["uses_https"])
+        self.assertFalse(https_usage["value"]["certificate_validated"])
 
-        self.assertEqual(reputation["score"], 70)
-        self.assertEqual(reputation["weight_percent"], 6.0)
-        self.assertEqual(reputation["weighted_contribution_points"], 4.2)
-        self.assertTrue(reputation["used_in_final_score"])
+        http_payload = self.predict("http://example.com/login")
+        http_usage = next(
+            item
+            for item in http_payload["indicators"]
+            if item["name"] == "httpsUsage"
+        )
+        self.assertEqual(http_usage["score"], 60)
+        self.assertFalse(http_usage["value"]["uses_https"])
+        self.assertFalse(http_usage["value"]["certificate_validated"])
+        self.assertEqual(http_usage["weight_percent"], 5.0)
+        self.assertEqual(http_usage["weighted_contribution_points"], 3.0)
+        self.assertTrue(http_usage["used_in_final_score"])
+
+    def test_scoring_config_contains_only_active_indicators(self):
+        response = self.client.get("/scoring-config")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["indicator_weight_total_percent"], 100.0)
+        self.assertEqual(
+            {item["name"] for item in payload["indicators"]},
+            set(backend.INDICATOR_WEIGHTS)
+        )
+        self.assertTrue(all(item["used_in_final_score"] for item in payload["indicators"]))
 
 
 if __name__ == "__main__":

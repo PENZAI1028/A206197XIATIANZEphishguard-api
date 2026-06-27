@@ -42,17 +42,22 @@ test_urls = [
     "https://login-support-limited.com"
 ]
 
-for i, url in enumerate(test_urls, start=1):
-    response = requests.post(
-        "http://127.0.0.1:5000/predict",
-        json={"url": url}
-    )
+def main():
+    for i, url in enumerate(test_urls, start=1):
+        response = requests.post(
+            "http://127.0.0.1:5000/predict",
+            json={"url": url}
+        )
 
-    result = response.json()
+        result = response.json()
 
-    print("\n==============================")
-    print(f"No. {i}")
-    print("URL:", url)
-    print("Result:", result["result"])
-    print("Risk Score:", result["risk_score"])
-    print("Explanation:", result["explanations"])
+        print("\n==============================")
+        print(f"No. {i}")
+        print("URL:", url)
+        print("Result:", result["result"])
+        print("Risk Score:", result["risk_score"])
+        print("Explanation:", result["explanations"])
+
+
+if __name__ == "__main__":
+    main()
