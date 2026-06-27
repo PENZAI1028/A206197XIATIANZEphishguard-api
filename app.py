@@ -5,6 +5,7 @@ import re
 import time
 import unicodedata
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse
 from difflib import SequenceMatcher
 
@@ -15,15 +16,15 @@ CORS(app)
 # Model loading
 # =========================
 try:
-    model = joblib.load("phishing_web_model.pkl")
+    model = joblib.load(Path(__file__).with_name("phishing_web_model.pkl"))
     MODEL_LOAD_ERROR = None
 except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "2.9"
+API_VERSION = "3.0"
 MODEL_NAME = "Enhanced Extra Trees URL Classifier"
-SCORE_METHOD = "Auditable 9-Indicator Weighted Scoring + Calibrated AI Probability"
+SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + Calibrated AI Probability"
 AI_WEIGHT = 0.18
 
 MODEL_FEATURE_NAMES = [
@@ -55,15 +56,49 @@ MODEL_FEATURE_NAMES = [
 # The weights sum to 1.00. Critical and official-domain rules are applied afterwards
 # and are reported separately in the score audit.
 INDICATOR_WEIGHTS = {
-    "officialDomain": 0.10,
+    "officialDomain": 0.12,
     "aiModelProbability": AI_WEIGHT,
-    "brandVerification": 0.18,
-    "homographAttack": 0.18,
+    "brandVerification": 0.20,
+    "homographAttack": 0.20,
     "urlStructure": 0.10,
     "suspiciousKeywords": 0.10,
-    "sslCertificate": 0.05,
-    "urlLengthComplexity": 0.05,
-    "domainReputation": 0.06
+    "httpsUsage": 0.05,
+    "urlLengthComplexity": 0.05
+}
+
+INDICATOR_DEFINITIONS = {
+    "officialDomain": {
+        "label": "Official Domain Verification",
+        "method": "Matches the parsed hostname against the backend's verified allowlist and look-alike rules."
+    },
+    "aiModelProbability": {
+        "label": "Calibrated AI-Assisted Risk",
+        "method": "Combines the loaded model's predict_proba output with URL-derived lexical evidence."
+    },
+    "brandVerification": {
+        "label": "Brand Impersonation",
+        "method": "Checks unofficial hostnames and short-link paths for protected brand names and close variants."
+    },
+    "homographAttack": {
+        "label": "Homograph and Typosquatting",
+        "method": "Checks Punycode, confusable characters, edit distance, and hostname similarity."
+    },
+    "urlStructure": {
+        "label": "URL Structure",
+        "method": "Checks redirect services, @ patterns, IP hosts, suspicious TLDs, encoding, and abnormal hostname structure."
+    },
+    "suspiciousKeywords": {
+        "label": "Suspicious Keywords",
+        "method": "Counts phishing-related terms in the parsed hostname, path, and query."
+    },
+    "httpsUsage": {
+        "label": "HTTPS Usage",
+        "method": "Checks whether the submitted URL scheme is https. It does not connect to the site or validate a TLS certificate."
+    },
+    "urlLengthComplexity": {
+        "label": "URL Length and Complexity",
+        "method": "Measures URL length and special-character count."
+    }
 }
 
 # =========================
@@ -1216,23 +1251,31 @@ def detect_suspicious_keywords(domain, path, query):
     )
 
 
-def detect_ssl_indicator(scheme):
+def detect_https_usage(scheme):
     if scheme == "https":
         return indicator(
-            "sslCertificate",
+            "httpsUsage",
             0,
             "safe",
-            "The URL uses HTTPS.",
-            "HTTPS",
+            "The submitted URL uses the HTTPS scheme. Certificate validity was not tested.",
+            {
+                "submitted_scheme": scheme,
+                "uses_https": True,
+                "certificate_validated": False
+            },
             "5%"
         )
 
     return indicator(
-        "sslCertificate",
+        "httpsUsage",
         60,
         "warning",
-        "The URL does not use HTTPS.",
-        "HTTP",
+        "The submitted URL does not use the HTTPS scheme. Certificate validity was not tested.",
+        {
+            "submitted_scheme": scheme,
+            "uses_https": False,
+            "certificate_validated": False
+        },
         "5%"
     )
 
@@ -1277,70 +1320,6 @@ def detect_url_length_complexity(url, domain):
             "special_characters": special_count
         },
         "5%"
-    )
-
-
-def detect_domain_reputation(domain):
-    """Score transparent local reputation evidence without claiming an external lookup."""
-    official, _, matched = domain_is_official(domain)
-    evidence = []
-    score = 0
-
-    if official:
-        return indicator(
-            "domainReputation",
-            0,
-            "safe",
-            f"Local reputation check matched verified official domain '{matched}'.",
-            {
-                "domain": domain,
-                "source": "verified official-domain allowlist",
-                "matched_entry": matched
-            },
-            "6%"
-        )
-
-    if is_shortener_domain(domain):
-        score = max(score, 70)
-        evidence.append("domain is listed as a URL-shortening or redirect service")
-
-    if re.search(r"(\d{1,3}\.){3}\d{1,3}", domain):
-        score = max(score, 90)
-        evidence.append("host is an IP address rather than a registered domain name")
-
-    if "xn--" in domain:
-        score = max(score, 95)
-        evidence.append("Punycode hostname requires homograph review")
-
-    tld = get_tld(domain)
-    tld_skeleton = normalize_confusable(tld)
-
-    if tld in BAD_TLDS:
-        score = max(score, BAD_TLDS[tld])
-        evidence.append(f".{tld} is present in the local high-risk TLD table")
-
-    if tld != tld_skeleton and tld_skeleton in COMMON_TLDS:
-        score = max(score, 95)
-        evidence.append(f".{tld} visually resembles common TLD .{tld_skeleton}")
-
-    status = "danger" if score >= 70 else "warning" if score >= 30 else "safe"
-    explanation = (
-        "Local reputation evidence: " + "; ".join(evidence) + "."
-        if evidence
-        else "No entry matched the API's local allowlist or high-risk reputation tables."
-    )
-
-    return indicator(
-        "domainReputation",
-        score,
-        status,
-        explanation,
-        {
-            "domain": domain,
-            "source": "local allowlist, redirect-service list, IP check, and high-risk TLD table",
-            "matched_evidence": evidence if evidence else "None"
-        },
-        "6%"
     )
 
 
@@ -1439,18 +1418,16 @@ def analyse_url(url):
     homograph_indicator = detect_homograph_attack(domain)
     structure_indicator = detect_url_structure(url, domain, scheme, path, query)
     keyword_indicator = detect_suspicious_keywords(domain, path, query)
-    ssl_indicator = detect_ssl_indicator(scheme)
+    https_indicator = detect_https_usage(scheme)
     length_indicator = detect_url_length_complexity(url, domain)
-    reputation_indicator = detect_domain_reputation(domain)
 
     indicators.extend([
         brand_indicator,
         homograph_indicator,
         structure_indicator,
         keyword_indicator,
-        ssl_indicator,
-        length_indicator,
-        reputation_indicator
+        https_indicator,
+        length_indicator
     ])
 
     score_by_name = {item["name"]: item["score"] for item in indicators}
@@ -1459,10 +1436,9 @@ def analyse_url(url):
     homograph_score = score_by_name.get("homographAttack", 0)
     structure_score = score_by_name.get("urlStructure", 0)
     keyword_score = score_by_name.get("suspiciousKeywords", 0)
-    ssl_score = score_by_name.get("sslCertificate", 0)
+    https_score = score_by_name.get("httpsUsage", 0)
     length_score = score_by_name.get("urlLengthComplexity", 0)
     official_score = score_by_name.get("officialDomain", 0)
-    reputation_score = score_by_name.get("domainReputation", 0)
 
     official_clean = (
         official_domain
@@ -1471,8 +1447,7 @@ def analyse_url(url):
         and homograph_score == 0
         and structure_score == 0
         and keyword_score == 0
-        and ssl_score == 0
-        and reputation_score == 0
+        and https_score == 0
     )
 
     if official_clean:
@@ -1540,7 +1515,7 @@ def analyse_url(url):
     if brand_score >= 90 and keyword_score >= 40:
         critical_reasons.append("brand name combined with phishing keyword")
 
-    if ssl_score >= 60 and keyword_score >= 70:
+    if https_score >= 60 and keyword_score >= 70:
         critical_reasons.append("HTTP combined with phishing keywords")
 
     if "@" in url:
@@ -1664,6 +1639,38 @@ def home():
         "api_version": API_VERSION,
         "model_loaded": model is not None,
         "model_load_error": MODEL_LOAD_ERROR
+    })
+
+
+@app.route("/scoring-config", methods=["GET"])
+def scoring_config():
+    indicators = []
+    for name, weight in INDICATOR_WEIGHTS.items():
+        definition = INDICATOR_DEFINITIONS[name]
+        indicators.append({
+            "name": name,
+            "label": definition["label"],
+            "method": definition["method"],
+            "weight_percent": round(weight * 100, 2),
+            "used_in_final_score": True
+        })
+
+    return jsonify({
+        "api_version": API_VERSION,
+        "score_method": SCORE_METHOD,
+        "indicators": indicators,
+        "indicator_weight_total_percent": round(sum(INDICATOR_WEIGHTS.values()) * 100, 2),
+        "risk_levels": [
+            {"label": "Trusted", "minimum": 0, "maximum": 19},
+            {"label": "Low Risk", "minimum": 20, "maximum": 44},
+            {"label": "Suspicious", "minimum": 45, "maximum": 79},
+            {"label": "High Risk", "minimum": 80, "maximum": 100}
+        ],
+        "limitations": [
+            "HTTPS Usage checks only the submitted URL scheme.",
+            "The API does not connect to the destination or validate its TLS certificate.",
+            "No WHOIS, DNS age, live blacklist, or external reputation lookup is performed."
+        ]
     })
 
 
