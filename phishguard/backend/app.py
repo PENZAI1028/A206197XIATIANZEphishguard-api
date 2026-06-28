@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
+import json
 import re
 import time
 import unicodedata
@@ -22,9 +23,9 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "3.0"
-MODEL_NAME = "Enhanced Extra Trees URL Classifier"
-SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + Calibrated AI Probability"
+API_VERSION = "4.0"
+MODEL_NAME = "PhishGuard Ensemble URL Classifier"
+SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + URL-Ngram AI Probability"
 AI_WEIGHT = 0.18
 
 MODEL_FEATURE_NAMES = [
@@ -101,98 +102,102 @@ INDICATOR_DEFINITIONS = {
     }
 }
 
+
 # =========================
-# Official domains / protected brands
-# Add your own verified domains here.
+# Trusted domain configuration
 # =========================
-OFFICIAL_DOMAINS = {
-    "google": [
-        "google.com", "google.com.my", "accounts.google.com", "mail.google.com"
-    ],
-    "paypal": [
-        "paypal.com", "paypal.com.my"
-    ],
-    "render": [
-        "render.com", "dashboard.render.com", "onrender.com"
-    ],
-    "figma": [
-        "figma.com"
-    ],
-    "cisco": [
-        "cisco.com", "webex.com"
-    ],
-    "apple": [
-        "apple.com", "icloud.com"
-    ],
-    "microsoft": [
-        "microsoft.com", "office.com", "live.com", "outlook.com",
-        "login.microsoftonline.com"
-    ],
-    "amazon": [
-        "amazon.com", "amazon.com.my"
-    ],
-    "facebook": [
-        "facebook.com", "fb.com"
-    ],
-    "instagram": [
-        "instagram.com"
-    ],
-    "netflix": [
-        "netflix.com"
-    ],
-    "whatsapp": [
-        "whatsapp.com"
-    ],
-    "github": [
-        "github.com"
-    ],
-    "stackoverflow": [
-        "stackoverflow.com"
-    ],
-    "openai": [
-        "openai.com", "chatgpt.com"
-    ],
-    "ukm": [
-        "ukm.my", "ukmfolio.ukm.my", "fism.ukm.my", "ftsm.ukm.my",
-        "siswa.ukm.edu.my"
-    ],
-    "maybank": [
-        "maybank2u.com.my", "maybank.com"
-    ],
-    "cimb": [
-        "cimb.com.my", "cimbclicks.com.my"
-    ],
-    "rhb": [
-        "rhbgroup.com"
-    ],
-    "touchngo": [
-        "touchngo.com.my", "tngdigital.com.my"
-    ],
-    "tng": [
-        "touchngo.com.my", "tngdigital.com.my"
-    ]
+# Keep the domain list in trusted_domains.json so it can be updated without
+# editing the detection logic. A verified owner domain is not the same as a
+# guarantee that every user-generated page, form, download, or message is safe.
+TRUSTED_DOMAIN_FILE = Path(__file__).with_name("trusted_domains.json")
+
+DEFAULT_OFFICIAL_DOMAINS = {
+    "google": ["google.com", "accounts.google.com", "mail.google.com", "docs.google.com"],
+    "microsoft": ["microsoft.com", "cloud.microsoft", "office.com", "live.com", "outlook.com"],
+    "apple": ["apple.com", "icloud.com"],
+    "render": ["render.com", "dashboard.render.com"],
+    "openai": ["openai.com", "chatgpt.com"],
+    "ukm": ["ukm.my", "ftsm.ukm.my", "siswa.ukm.edu.my"],
+    "okooo": ["okooo.com"]
 }
 
-# Some official hosts should be matched exactly only. For example,
-# "dashb0ard.render.com" is under render.com but visually imitates
-# "dashboard.render.com", so it must not be trusted just because the
-# parent domain is official.
-EXACT_ONLY_OFFICIAL_DOMAINS = {
-    "render.com",
-    "dashboard.render.com"
-}
+def load_trusted_domain_config():
+    default = {
+        "official_domains": DEFAULT_OFFICIAL_DOMAINS,
+        "exact_only_official_domains": ["render.com", "dashboard.render.com"],
+        "shared_hosting_domains": []
+    }
 
+    try:
+        with TRUSTED_DOMAIN_FILE.open("r", encoding="utf-8") as fp:
+            config = json.load(fp)
+        official = config.get("official_domains")
+        if not isinstance(official, dict) or not official:
+            raise ValueError("official_domains must be a non-empty JSON object")
+
+        cleaned_official = {}
+        for brand, domains in official.items():
+            if not isinstance(brand, str) or not isinstance(domains, list):
+                continue
+            cleaned = sorted({
+                str(domain).strip().lower().lstrip(".")
+                for domain in domains
+                if isinstance(domain, str) and "." in domain
+            })
+            if cleaned:
+                cleaned_official[brand.strip().lower()] = cleaned
+
+        if not cleaned_official:
+            raise ValueError("No valid official domains found")
+
+        return {
+            "official_domains": cleaned_official,
+            "exact_only_official_domains": {
+                str(domain).strip().lower().lstrip(".")
+                for domain in config.get("exact_only_official_domains", [])
+                if isinstance(domain, str)
+            },
+            "shared_hosting_domains": {
+                str(domain).strip().lower().lstrip(".")
+                for domain in config.get("shared_hosting_domains", [])
+                if isinstance(domain, str)
+            },
+            "loaded_from_file": True,
+            "load_error": None
+        }
+    except Exception as exc:
+        return {
+            "official_domains": DEFAULT_OFFICIAL_DOMAINS,
+            "exact_only_official_domains": {"render.com", "dashboard.render.com"},
+            "shared_hosting_domains": set(),
+            "loaded_from_file": False,
+            "load_error": str(exc)
+        }
+
+TRUSTED_DOMAIN_CONFIG = load_trusted_domain_config()
+OFFICIAL_DOMAINS = TRUSTED_DOMAIN_CONFIG["official_domains"]
+EXACT_ONLY_OFFICIAL_DOMAINS = TRUSTED_DOMAIN_CONFIG["exact_only_official_domains"]
+SHARED_HOSTING_DOMAINS = TRUSTED_DOMAIN_CONFIG["shared_hosting_domains"]
+
+# These are protected service names, plus known legitimate subdomain labels
+# generated from trusted_domains.json. Matching is done through confusable
+# skeletons, not only numeric substitutions. It catches 0/o, 1/i/l/I, rn/m,
+# vv/w, and common Cyrillic/Greek look-alikes.
 PROTECTED_SERVICE_LABELS = {
-    "account", "accounts", "auth", "billing", "dashboard", "email", "elearning",
-    "fism", "ftsm", "helpdesk", "lms", "login", "mail", "moodle", "my",
-    "payment", "portal", "secure", "security", "service", "signin", "siswa",
-    "support", "ukmfolio", "verify", "webmail"
+    "account", "accounts", "admin", "api", "auth", "authentication", "billing",
+    "calendar", "cloud", "confirm", "dashboard", "docs", "drive", "email",
+    "forms", "help", "helpdesk", "home", "id", "identity", "login", "mail",
+    "microsoft", "office", "payment", "portal", "secure", "security", "service",
+    "signin", "support", "verify", "webmail", "word", "workspace", "www",
+    "youtube", "zoom", "wallet", "banking", "checkout", "profile", "settings",
+    "storage", "teams", "meet", "sheets", "slides", "photos", "maps", "play",
+    "ukmfolio", "siswa", "ftsm", "fism", "moodle", "elearning", "lms"
 }
 
 SHORTENER_DOMAINS = {
     "goo.su", "bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly",
     "rebrand.ly", "shorturl.at", "ow.ly", "buff.ly", "s.id",
-    "lnkd.in", "tiny.cc", "rb.gy"
+    "lnkd.in", "tiny.cc", "rb.gy", "short.io", "bl.ink"
 }
 
 SUSPICIOUS_KEYWORDS = [
@@ -200,52 +205,46 @@ SUSPICIOUS_KEYWORDS = [
     "payment", "password", "unlock", "suspend", "wallet", "support",
     "limited", "signin", "sign-in", "reset", "bank", "urgent", "locked",
     "email", "emails", "credential", "credentials", "otp", "auth",
-    "recover", "verification", "validate"
+    "recover", "verification", "validate", "authorize", "invoice",
+    "refund", "gift", "bonus", "kyc", "crypto", "seed", "airdrop"
 ]
 
 BAD_TLDS = {
-    "xyz": 80,
-    "top": 80,
-    "click": 80,
-    "ru": 85,
-    "tk": 80,
-    "ml": 80,
-    "cf": 75,
-    "gq": 75,
-    "info": 65,
-    "work": 65,
-    "loan": 80,
-    "monster": 75,
-    "rest": 70,
-    "fit": 70
+    "xyz": 80, "top": 80, "click": 80, "ru": 85, "tk": 80, "ml": 80,
+    "cf": 75, "gq": 75, "info": 65, "work": 65, "loan": 80,
+    "monster": 75, "rest": 70, "fit": 70, "buzz": 70, "live": 45,
+    "cam": 70, "sbs": 70, "cyou": 70
 }
 
 COMMON_TLDS = {
     "com", "net", "org", "edu", "gov", "my", "uk", "io", "ai", "co",
-    "com.my", "edu.my", "gov.my", "org.my", "co.uk"
+    "com.my", "edu.my", "gov.my", "org.my", "co.uk", "com.sg", "com.au"
 }
 
 TWO_LEVEL_SUFFIXES = {
     "com.my", "edu.my", "gov.my", "org.my", "net.my",
-    "co.uk", "org.uk", "ac.uk",
+    "co.uk", "org.uk", "ac.uk", "gov.uk",
     "com.au", "net.au", "org.au",
-    "co.jp", "ne.jp",
-    "co.id", "or.id"
+    "co.jp", "ne.jp", "or.jp",
+    "co.id", "or.id", "ac.id",
+    "com.sg", "org.sg", "edu.sg"
 }
 
 # =========================
 # Confusable / look-alike mapping
-# This fixes: goog1e, g00gle, paypaI, c0m, rn -> m, vv -> w
 # =========================
+# The same skeleton is used for both the submitted hostname and known trusted
+# hostnames. Therefore "goog1e", "g00gle", "googIe", "mlcrosoft", "m1crosoft",
+# "d0cs.google.com", and "mall.google.com" are evaluated consistently.
 CONFUSABLE_MAP = {
     # o / 0 / Greek omicron / Cyrillic o
     "0": "o", "o": "o", "O": "o",
     "ο": "o", "Ο": "o", "о": "o", "О": "o",
 
-    # l / I / i / 1 / |
-    "1": "l", "l": "l", "L": "l",
-    "i": "l", "I": "l", "|": "l", "!": "l",
-    "ı": "l", "İ": "l", "і": "l", "І": "l", "ӏ": "l",
+    # l / I / i / 1 / vertical stroke / dotless and Cyrillic i
+    "1": "l", "l": "l", "L": "l", "i": "l", "I": "l",
+    "|": "l", "!": "l", "ı": "l", "İ": "l", "і": "l",
+    "І": "l", "ӏ": "l",
 
     # e / 3
     "3": "e", "e": "e", "E": "e", "€": "e",
@@ -269,15 +268,20 @@ CONFUSABLE_MAP = {
     "а": "a", "А": "a", "α": "a", "Α": "a",
     "с": "c", "С": "c", "ϲ": "c", "¢": "c",
     "е": "e", "Е": "e", "є": "e",
-    "р": "p", "Р": "p",
+    "р": "p", "Р": "p", "ρ": "p",
     "х": "x", "Х": "x",
     "у": "y", "У": "y",
     "һ": "h", "Н": "h", "н": "h",
     "к": "k", "К": "k",
     "м": "m", "М": "m",
     "ν": "v", "ѵ": "v",
-    "ʏ": "y",
+    "ʏ": "y"
 }
+
+CONFUSABLE_MARKER_RE = re.compile(
+    r"[01345789@!|$]|[οΟоОаАαΑсСϲ¢еЕєрРρхуУһНнкКмМνѵʏıİіІӏ]",
+    re.UNICODE
+)
 
 
 # =========================
@@ -390,6 +394,44 @@ def get_sld(domain):
     return parts[-2]
 
 
+
+def normalize_confusable(text):
+    """Return an ASCII comparison skeleton without changing the submitted URL."""
+    if not text:
+        return ""
+
+    text = unicodedata.normalize("NFKC", str(text))
+    result = "".join(CONFUSABLE_MAP.get(ch, ch.lower()) for ch in text)
+
+    # Common multi-character visual substitutions.
+    result = result.replace("rn", "m")
+    result = result.replace("vv", "w")
+    return result
+
+
+def similarity_ratio(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def levenshtein_distance(a, b):
+    if a == b:
+        return 0
+
+    if len(a) < len(b):
+        a, b = b, a
+
+    previous = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        current = [i]
+        for j, cb in enumerate(b, 1):
+            insert_cost = current[j - 1] + 1
+            delete_cost = previous[j] + 1
+            replace_cost = previous[j - 1] + (ca != cb)
+            current.append(min(insert_cost, delete_cost, replace_cost))
+        previous = current
+    return previous[-1]
+
+
 def is_same_or_subdomain(domain, official):
     domain = strip_www(domain)
     official = strip_www(official)
@@ -407,35 +449,99 @@ def subdomain_labels_before_official(domain, official):
     return [label for label in prefix.split(".") if label]
 
 
-def has_ascii_lookalike_marker(label):
-    return bool(re.search(r"[01345789@!|$]", label or ""))
+def has_confusable_marker(label):
+    return bool(CONFUSABLE_MARKER_RE.search(label or ""))
+
+
+def protected_subdomain_label_map():
+    """
+    Build {skeleton: {allowed real labels}} from explicit service names and
+    every label already present in trusted_domains.json.
+
+    This removes the former blind spot where d0cs.google.com was accepted
+    because only a small fixed list of labels was checked.
+    """
+    protected = {}
+
+    def add_label(label):
+        label = str(label).strip().lower()
+        if len(label) < 4:
+            return
+        skeleton = normalize_confusable(label)
+        if len(skeleton) < 4:
+            return
+        protected.setdefault(skeleton, set()).add(label)
+
+    for label in PROTECTED_SERVICE_LABELS:
+        add_label(label)
+
+    for brand, domains in OFFICIAL_DOMAINS.items():
+        add_label(brand)
+        for official in domains:
+            for label in strip_www(official).split("."):
+                add_label(label)
+
+    return protected
+
+
+def find_protected_label_match(label):
+    """
+    Detect fake labels such as d0cs, mall, ma1l, w0rd, mlcrosoft.
+    It compares the raw label with the real approved spellings and only lets
+    the exact approved spelling pass.
+    """
+    label = str(label or "").strip().lower()
+    if len(label) < 4:
+        return None
+
+    label_skeleton = normalize_confusable(label)
+    known = protected_subdomain_label_map()
+
+    for protected_skeleton, approved_spellings in known.items():
+        if len(protected_skeleton) < 4:
+            continue
+
+        # Exact real spelling is legitimate.
+        if label in approved_spellings:
+            continue
+
+        distance = levenshtein_distance(label_skeleton, protected_skeleton)
+        similarity = similarity_ratio(label_skeleton, protected_skeleton)
+
+        # Strong cases:
+        # - normalized skeleton is identical (mall -> mail; d0cs -> docs)
+        # - marker substitution and a close edit-distance match
+        # - a high-similarity near typo for a sufficiently long service label
+        exact_skeleton_match = label_skeleton == protected_skeleton
+        marked_near_match = (
+            has_confusable_marker(label)
+            and (distance <= 1 or similarity >= 0.90)
+        )
+        close_typo = (
+            len(protected_skeleton) >= 5
+            and distance == 1
+            and similarity >= 0.80
+        )
+
+        if exact_skeleton_match or marked_near_match or close_typo:
+            return {
+                "label": label,
+                "label_skeleton": label_skeleton,
+                "matched_service": sorted(approved_spellings)[0],
+                "matched_service_skeleton": protected_skeleton,
+                "distance": distance,
+                "similarity": round(similarity, 3)
+            }
+
+    return None
 
 
 def suspicious_unverified_official_subdomain(domain, official):
     suspicious = []
-
     for label in subdomain_labels_before_official(domain, official):
-        if not has_ascii_lookalike_marker(label):
-            continue
-
-        label_skeleton = normalize_confusable(label)
-
-        for service_label in PROTECTED_SERVICE_LABELS:
-            service_skeleton = normalize_confusable(service_label)
-            distance = levenshtein_distance(label_skeleton, service_skeleton)
-            similarity = similarity_ratio(label_skeleton, service_skeleton)
-
-            if label_skeleton == service_skeleton or distance <= 1 or similarity >= 0.88:
-                suspicious.append({
-                    "label": label,
-                    "label_skeleton": label_skeleton,
-                    "matched_service": service_label,
-                    "matched_service_skeleton": service_skeleton,
-                    "distance": distance,
-                    "similarity": round(similarity, 2)
-                })
-                break
-
+        match = find_protected_label_match(label)
+        if match:
+            suspicious.append(match)
     return suspicious
 
 
@@ -446,98 +552,68 @@ def is_official_domain_match(domain, official):
     if official in EXACT_ONLY_OFFICIAL_DOMAINS:
         return domain == official
 
+    if not is_same_or_subdomain(domain, official):
+        return False
+
+    # A valid parent domain must not automatically trust a deceptive
+    # subdomain, for example d0cs.google.com or w0rd.cloud.microsoft.
     if suspicious_unverified_official_subdomain(domain, official):
         return False
 
-    return is_same_or_subdomain(domain, official)
-
-
-def normalize_confusable(text):
-    if not text:
-        return ""
-
-    text = unicodedata.normalize("NFKC", str(text))
-
-    chars = []
-    for ch in text:
-        chars.append(CONFUSABLE_MAP.get(ch, ch.lower()))
-
-    result = "".join(chars)
-
-    # Multi-character visual replacements
-    result = result.replace("rn", "m")
-    result = result.replace("vv", "w")
-
-    return result
-
-
-def similarity_ratio(a, b):
-    return SequenceMatcher(None, a, b).ratio()
-
-
-def levenshtein_distance(a, b):
-    if a == b:
-        return 0
-
-    if len(a) < len(b):
-        a, b = b, a
-
-    previous = list(range(len(b) + 1))
-
-    for i, ca in enumerate(a, 1):
-        current = [i]
-        for j, cb in enumerate(b, 1):
-            insert_cost = current[j - 1] + 1
-            delete_cost = previous[j] + 1
-            replace_cost = previous[j - 1] + (ca != cb)
-            current.append(min(insert_cost, delete_cost, replace_cost))
-        previous = current
-
-    return previous[-1]
+    return True
 
 
 def domain_is_official(domain):
     domain = strip_www(domain)
-
     for brand, domains in OFFICIAL_DOMAINS.items():
         for official in domains:
             official = strip_www(official)
             if is_official_domain_match(domain, official):
                 return True, brand, official
-
     return False, None, None
 
 
 def find_suspicious_official_subdomain(domain):
     domain = strip_www(domain)
-
     for brand, domains in OFFICIAL_DOMAINS.items():
         for official in domains:
             official = strip_www(official)
             suspicious_labels = suspicious_unverified_official_subdomain(domain, official)
-
             if suspicious_labels:
                 return True, brand, official, suspicious_labels
-
     return False, None, None, []
 
 
 def domain_skeleton_matches_official(domain):
-    domain = strip_www(domain)
-    domain_skeleton = normalize_confusable(domain)
+    """
+    Compare full hostnames after confusable normalization.
 
+    It catches root-domain impersonation (g00gle.com, googIe.com,
+    m1crosoft.com, m.ok000.com) and fake service subdomains
+    (w0rd.cloud.microsoft) after the raw-domain trust check has failed.
+    """
+    domain = strip_www(domain)
+    official_raw, _, _ = domain_is_official(domain)
+    if official_raw:
+        return False, None, None
+
+    domain_skeleton = normalize_confusable(domain)
     for brand, domains in OFFICIAL_DOMAINS.items():
         for official in domains:
             official = strip_www(official)
             official_skeleton = normalize_confusable(official)
-
-            if is_official_domain_match(domain_skeleton, official_skeleton):
-                official_raw, _, _ = domain_is_official(domain)
-
-                if not official_raw:
-                    return True, brand, official
+            if is_same_or_subdomain(domain_skeleton, official_skeleton):
+                return True, brand, official
 
     return False, None, None
+
+
+def is_shared_hosting_domain(domain):
+    domain = strip_www(domain)
+    return any(
+        domain == provider or domain.endswith("." + provider)
+        for provider in SHARED_HOSTING_DOMAINS
+    )
 
 
 def is_shortener_domain(domain):
@@ -682,7 +758,47 @@ def extract_url_features(url):
     ]]
 
 
-def build_model_feature_audit(features):
+
+def is_url_model_bundle():
+    return (
+        isinstance(model, dict)
+        and hasattr(model.get("pipeline"), "predict_proba")
+    )
+
+
+def current_model_name():
+    if is_url_model_bundle():
+        return str(model.get("model_name") or "Character-Ngram + Lexical URL Classifier")
+    return MODEL_NAME
+
+
+def build_model_feature_audit(features, url=None):
+    """
+    Supports both:
+      1) legacy 22-numeric-feature sklearn models; and
+      2) the v4 URL model bundle trained by training/train_url_model.py.
+    """
+    if is_url_model_bundle():
+        manifest = model.get("feature_manifest", [])
+        if not manifest:
+            manifest = [
+                {
+                    "name": "character_ngrams",
+                    "value": "3-5 character URL n-grams",
+                    "used_by_model": True,
+                    "model_importance": None,
+                    "model_importance_percent": None
+                },
+                {
+                    "name": "lexical_url_features",
+                    "value": "length, host, path, punctuation, digits, HTTPS and IP flags",
+                    "used_by_model": True,
+                    "model_importance": None,
+                    "model_importance_percent": None
+                }
+            ]
+        return manifest
+
     values = list(features[0])
     importances = getattr(model, "feature_importances_", None)
 
@@ -708,25 +824,28 @@ def build_model_feature_audit(features):
             "model_importance": round(importance, 8) if importance is not None else None,
             "model_importance_percent": round(importance * 100, 4) if importance is not None else None
         })
-
     return audit
 
 
-def get_phishing_probability(features):
+def get_phishing_probability(features, url=None):
     if model is None:
         raise RuntimeError(f"AI model is unavailable: {MODEL_LOAD_ERROR or 'unknown loading error'}")
 
     try:
-        probability = model.predict_proba(features)[0]
+        if is_url_model_bundle():
+            probability = model["pipeline"].predict_proba([url or ""])[0]
+            classes = list(model["pipeline"].classes_)
+        else:
+            probability = model.predict_proba(features)[0]
+            classes = list(getattr(model, "classes_", []))
 
-        if hasattr(model, "classes_") and 1 in model.classes_:
-            phishing_index = list(model.classes_).index(1)
+        if 1 in classes:
+            phishing_index = classes.index(1)
             phishing_probability = float(probability[phishing_index])
         else:
             phishing_probability = float(probability[-1])
 
         confidence = float(max(probability))
-
         return phishing_probability, confidence
 
     except Exception as exc:
@@ -782,7 +901,8 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
 
         domain_skeleton = normalize_confusable(domain)
         for brand in OFFICIAL_DOMAINS.keys():
-            if normalize_confusable(brand) in domain_skeleton:
+            brand_skeleton = normalize_confusable(brand)
+            if len(brand_skeleton) >= 4 and brand_skeleton in domain_skeleton:
                 score += 22
                 break
 
@@ -862,6 +982,7 @@ def indicator(name, score, status, explanation, value=None, weight=None):
 # =========================
 # Indicator detection
 # =========================
+
 def detect_official_domain(domain):
     official, brand, matched = domain_is_official(domain)
 
@@ -870,21 +991,23 @@ def detect_official_domain(domain):
             "officialDomain",
             0,
             "safe",
-            f"The URL matches a verified official domain: {matched}.",
-            domain,
+            (
+                f"The hostname matches a verified official domain: {matched}. "
+                "This verifies domain ownership only; page content and external reputation were not inspected."
+            ),
+            {"domain": domain, "brand": brand, "matched_domain": matched},
             "12%"
         )
 
     suspicious_subdomain, suspicious_brand, parent_domain, suspicious_labels = find_suspicious_official_subdomain(domain)
-
     if suspicious_subdomain:
         return indicator(
             "officialDomain",
             95,
             "danger",
             (
-                "Suspicious unverified subdomain under a protected official domain. "
-                "The subdomain uses look-alike character substitution for a protected service name."
+                "Suspicious look-alike subdomain under a protected official parent domain. "
+                "The subdomain changes a protected service name using confusable characters."
             ),
             {
                 "domain": domain,
@@ -896,13 +1019,12 @@ def detect_official_domain(domain):
         )
 
     skeleton_match, skeleton_brand, skeleton_official = domain_skeleton_matches_official(domain)
-
     if skeleton_match:
         return indicator(
             "officialDomain",
             100,
             "danger",
-            f"Look-alike official domain detected. This domain visually matches '{skeleton_official}' but is not the real official domain.",
+            f"Look-alike official domain detected. This hostname visually matches '{skeleton_official}' but is not the verified domain.",
             {
                 "domain": domain,
                 "matched_brand": skeleton_brand,
@@ -912,11 +1034,28 @@ def detect_official_domain(domain):
             "12%"
         )
 
+    if is_shared_hosting_domain(domain):
+        return indicator(
+            "officialDomain",
+            45,
+            "warning",
+            (
+                "This hostname is on a shared hosting or user-content platform. "
+                "The platform is legitimate, but the specific page owner and content cannot be verified by domain matching alone."
+            ),
+            {"domain": domain, "platform_root": next(
+                (provider for provider in SHARED_HOSTING_DOMAINS
+                 if domain == provider or domain.endswith("." + provider)),
+                None
+            )},
+            "12%"
+        )
+
     return indicator(
         "officialDomain",
         20,
         "warning",
-        "The URL does not match the verified official-domain whitelist.",
+        "The hostname does not match the curated verified-domain list.",
         domain,
         "12%"
     )
@@ -941,7 +1080,7 @@ def detect_brand_impersonation(domain, path="", query=""):
     for brand, official_list in OFFICIAL_DOMAINS.items():
         brand_skeleton = normalize_confusable(brand)
 
-        if brand_skeleton in domain_skeleton:
+        if len(brand_skeleton) >= 4 and brand_skeleton in domain_skeleton:
             return indicator(
                 "brandVerification",
                 100,
@@ -1344,8 +1483,8 @@ def analyse_url(url):
 
     # AI Model
     features = extract_url_features(url)
-    model_feature_audit = build_model_feature_audit(features)
-    raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features)
+    model_feature_audit = build_model_feature_audit(features, url=url)
+    raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features, url=url)
     feature_ai_probability = estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain)
     calibrated_ai_phishing_probability = calibrate_ai_probability(
         raw_ai_phishing_probability,
@@ -1571,6 +1710,17 @@ def analyse_url(url):
             applied_overrides.append("verified official-domain cap: final risk limited to at most 10")
         risk_score = overridden_score
 
+    # A shared-hosting provider is legitimate, but its customer subdomains can
+    # contain arbitrary content. Do not present those URLs as "Trusted" solely
+    # because the provider itself is well known.
+    if is_shared_hosting_domain(domain) and not critical:
+        overridden_score = max(risk_score, 20)
+        if overridden_score != risk_score:
+            applied_overrides.append(
+                "shared-hosting floor: page ownership cannot be verified, final risk raised to at least 20"
+            )
+        risk_score = overridden_score
+
     risk_score = max(0, min(100, risk_score))
     safety_score = 100 - risk_score
 
@@ -1588,7 +1738,7 @@ def analyse_url(url):
         result = "Trusted"
 
     model_info = {
-        "model_name": MODEL_NAME,
+        "model_name": current_model_name(),
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
         "model_load_error": MODEL_LOAD_ERROR,
@@ -1652,8 +1802,8 @@ def build_recommendations(risk_score):
         ]
     else:
         return [
-            "No obvious phishing indicators were detected.",
-            "Safe to proceed with normal browsing activities."
+            "No obvious URL-level phishing indicators were detected.",
+            "The result does not inspect page content, redirects, downloads, or user-generated forms. Verify sensitive requests independently."
         ]
 
 
@@ -1744,7 +1894,7 @@ def predict():
         "critical_reasons": model_info.get("critical_reasons", []),
         "timestamp": timestamp,
         "analysis_time_ms": analysis_time_ms,
-        "model_name": MODEL_NAME,
+        "model_name": current_model_name(),
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
         "confidence": model_info["ai_confidence_percent"],

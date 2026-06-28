@@ -1,8 +1,8 @@
-flask
-flask-cors
-joblib
-pandas
-numpy
-scikit-learn==1.8.0
-python-Levenshtein
-gunicorn
+# Python 3.14-compatible runtime dependencies
+Flask>=3.0,<4
+flask-cors>=4.0,<7
+gunicorn>=22,<24
+joblib>=1.4,<2
+numpy==2.5.0
+scipy==1.18.0
+scikit-learn==1.9.0
