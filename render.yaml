@@ -14,7 +14,6 @@ services:
   - type: web
     name: A206197XIATIANZEphishguard-web
     runtime: static
-    plan: free
     branch: main
     rootDir: front
     buildCommand: pnpm install --frozen-lockfile && pnpm run build
