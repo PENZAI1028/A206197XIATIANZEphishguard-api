@@ -640,7 +640,7 @@ export function PhishingDetector({
                         <ul className="ml-4 space-y-0.5 list-disc list-inside">
                           {result.score_audit.critical_top_signals.map(signal => (
                             <li key={signal.name}>
-                              {INDICATOR_LABELS[signal.name] ?? signal.name}: {signal.score}/100 x{' '}
+                              {friendlyName(signal.name)}: {signal.score}/100 x{' '}
                               {signal.aggregation_weight_percent}%
                             </li>
                           ))}
