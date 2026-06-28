@@ -23,9 +23,9 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "4.0"
+API_VERSION = "4.1"
 MODEL_NAME = "PhishGuard Ensemble URL Classifier"
-SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + URL-Ngram AI Probability"
+SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + Dynamic Critical-Evidence Aggregation"
 AI_WEIGHT = 0.18
 
 MODEL_FEATURE_NAMES = [
@@ -1666,10 +1666,42 @@ def analyse_url(url):
     critical = len(critical_reasons) > 0
     applied_overrides = []
 
+    critical_top_signals = []
+    critical_evidence_score = None
+
     if critical:
-        overridden_score = max(risk_score, 90)
+        ranked_signals = sorted(
+            score_by_name.items(),
+            key=lambda item: item[1],
+            reverse=True
+        )
+        aggregation_weights = (0.65, 0.20, 0.15)
+        critical_top_signals = [
+            {
+                "name": name,
+                "score": score,
+                "aggregation_weight_percent": int(weight * 100)
+            }
+            for (name, score), weight in zip(
+                ranked_signals[:3],
+                aggregation_weights
+            )
+        ]
+        critical_evidence_score = int(round(sum(
+            signal["score"] * (signal["aggregation_weight_percent"] / 100)
+            for signal in critical_top_signals
+        )))
+        critical_evidence_score = max(80, min(100, critical_evidence_score))
+        overridden_score = max(risk_score, critical_evidence_score)
         if overridden_score != risk_score:
-            applied_overrides.append("critical risk floor: final risk raised to at least 90")
+            signal_summary = ", ".join(
+                f"{signal['name']}={signal['score']}"
+                for signal in critical_top_signals
+            )
+            applied_overrides.append(
+                "dynamic critical-evidence floor: "
+                f"{signal_summary} produced {critical_evidence_score}/100"
+            )
         risk_score = overridden_score
 
     # Combined-signal floor for non-brand phishing campaigns. Generic phishing
@@ -1763,6 +1795,8 @@ def analyse_url(url):
         "official_matched_domain": official_matched,
         "domain_skeleton": normalize_confusable(domain),
         "critical_reasons": critical_reasons,
+        "critical_evidence_score": critical_evidence_score,
+        "critical_top_signals": critical_top_signals,
         "model_features": model_feature_audit,
         "model_feature_count": len(model_feature_audit),
         "indicator_weights": {
@@ -1845,6 +1879,12 @@ def scoring_config():
             {"label": "Suspicious", "minimum": 45, "maximum": 79},
             {"label": "High Risk", "minimum": 80, "maximum": 100}
         ],
+        "critical_aggregation": {
+            "method": "When a critical phishing rule fires, the three highest active indicator scores are aggregated instead of assigning a fixed score.",
+            "top_signal_weights_percent": [65, 20, 15],
+            "minimum_critical_score": 80,
+            "maximum_critical_score": 100
+        },
         "limitations": [
             "HTTPS Usage checks only the submitted URL scheme.",
             "The API does not connect to the destination or validate its TLS certificate.",
@@ -1923,7 +1963,9 @@ def predict():
             "final_risk_score": model_info["final_risk_score"],
             "rounding_adjustment_points": model_info["rounding_adjustment_points"],
             "override_adjustment_points": model_info["override_adjustment_points"],
-            "applied_overrides": model_info["applied_overrides"]
+            "applied_overrides": model_info["applied_overrides"],
+            "critical_evidence_score": model_info["critical_evidence_score"],
+            "critical_top_signals": model_info["critical_top_signals"]
         },
         "model_info": model_info,
         "explanations": explanations,

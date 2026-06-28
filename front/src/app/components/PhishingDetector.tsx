@@ -46,6 +46,12 @@ interface ScoreAudit {
   rounding_adjustment_points: number;
   override_adjustment_points: number;
   applied_overrides: string[];
+  critical_evidence_score: number | null;
+  critical_top_signals: Array<{
+    name: string;
+    score: number;
+    aggregation_weight_percent: number;
+  }>;
 }
 
 interface AIResult {
@@ -368,7 +374,7 @@ export function PhishingDetector({
       // Persist to Supabase (best-effort)
       try {
         const { projectId, publicAnonKey } = await import('../../../utils/supabase/info');
-        await fetch(
+        void fetch(
           `https://${projectId}.supabase.co/functions/v1/make-server-358bdfd0/detections`,
           {
             method: 'POST',
@@ -390,7 +396,7 @@ export function PhishingDetector({
               indicators: data.indicators,
             }),
           }
-        );
+        ).catch(() => undefined);
       } catch { /* non-fatal */ }
     } catch {
       setApiError('Unable to connect to PhishGuard AI API. Please try again later.');
@@ -628,6 +634,22 @@ export function PhishingDetector({
                     <p className="font-mono">
                       Final risk score = {result.score_audit?.final_risk_score}
                     </p>
+                    {result.score_audit?.critical_evidence_score != null && (
+                      <>
+                        <p className="mt-2 font-semibold">Dynamic critical-evidence calculation:</p>
+                        <ul className="ml-4 space-y-0.5 list-disc list-inside">
+                          {result.score_audit.critical_top_signals.map(signal => (
+                            <li key={signal.name}>
+                              {INDICATOR_LABELS[signal.name] ?? signal.name}: {signal.score}/100 x{' '}
+                              {signal.aggregation_weight_percent}%
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="font-mono">
+                          Critical evidence score = {result.score_audit.critical_evidence_score}/100
+                        </p>
+                      </>
+                    )}
                     <p className="font-mono">Safety score = 100 - final risk score</p>
                     <p className="font-semibold mt-2">Overrides applied to this scan:</p>
                     {result.score_audit?.applied_overrides?.length > 0 ? (

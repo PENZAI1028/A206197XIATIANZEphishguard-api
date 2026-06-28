@@ -26,6 +26,12 @@ interface ScoringConfig {
   indicators: ScoringIndicator[];
   indicator_weight_total_percent: number;
   risk_levels: RiskLevel[];
+  critical_aggregation: {
+    method: string;
+    top_signal_weights_percent: number[];
+    minimum_critical_score: number;
+    maximum_critical_score: number;
+  };
   limitations: string[];
 }
 
@@ -183,6 +189,17 @@ export function ScoringCriteria() {
                     {indicator.label} x {indicator.weight_percent}%
                   </p>
                 ))}
+                <p className="mt-3">{config.critical_aggregation.method}</p>
+                <p>
+                  Critical evidence = highest indicator x{' '}
+                  {config.critical_aggregation.top_signal_weights_percent[0]}% + second x{' '}
+                  {config.critical_aggregation.top_signal_weights_percent[1]}% + third x{' '}
+                  {config.critical_aggregation.top_signal_weights_percent[2]}%
+                </p>
+                <p>
+                  Critical range = {config.critical_aggregation.minimum_critical_score}-
+                  {config.critical_aggregation.maximum_critical_score}
+                </p>
                 <p className="mt-2">Safety score = 100 - final risk score</p>
               </div>
             </div>
