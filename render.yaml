@@ -16,7 +16,7 @@ services:
     runtime: static
     branch: main
     rootDir: front
-    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: echo "Using committed front/dist build"
     staticPublishPath: ./dist
     autoDeployTrigger: commit
     routes:
