@@ -15,9 +15,9 @@ services:
     name: A206197XIATIANZEphishguard-web
     runtime: static
     branch: main
-    rootDir: front
-    buildCommand: echo "Using committed front/dist build"
-    staticPublishPath: ./dist
+    rootDir: front/dist
+    buildCommand: echo "Publishing committed frontend build"
+    staticPublishPath: .
     autoDeployTrigger: commit
     routes:
       - type: rewrite

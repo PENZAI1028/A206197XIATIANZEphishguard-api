@@ -1,5 +1,3 @@
-import requests
-
 test_urls = [
     # 1. Official / Safe websites
     "https://www.goog1e.com",
@@ -43,6 +41,8 @@ test_urls = [
 ]
 
 def main():
+    import requests
+
     for i, url in enumerate(test_urls, start=1):
         response = requests.post(
             "http://127.0.0.1:5000/predict",

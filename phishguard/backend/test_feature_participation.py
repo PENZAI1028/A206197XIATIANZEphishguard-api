@@ -15,15 +15,25 @@ class FeatureParticipationTests(unittest.TestCase):
 
     def test_all_model_features_are_used_by_loaded_model(self):
         self.assertIsNotNone(backend.model, backend.MODEL_LOAD_ERROR)
-        self.assertEqual(len(backend.MODEL_FEATURE_NAMES), 22)
-        self.assertEqual(
-            int(backend.model.n_features_in_),
-            len(backend.MODEL_FEATURE_NAMES)
-        )
-        self.assertTrue(all(float(value) > 0 for value in backend.model.feature_importances_))
 
         payload = self.predict("https://goo.su/i.whatAapp")
-        self.assertEqual(len(payload["model_features"]), len(backend.MODEL_FEATURE_NAMES))
+        if backend.is_url_model_bundle():
+            self.assertTrue(hasattr(backend.model["pipeline"], "predict_proba"))
+            self.assertGreater(len(payload["model_features"]), 0)
+        else:
+            self.assertEqual(len(backend.MODEL_FEATURE_NAMES), 22)
+            self.assertEqual(
+                int(backend.model.n_features_in_),
+                len(backend.MODEL_FEATURE_NAMES)
+            )
+            self.assertTrue(
+                all(float(value) > 0 for value in backend.model.feature_importances_)
+            )
+            self.assertEqual(
+                len(payload["model_features"]),
+                len(backend.MODEL_FEATURE_NAMES)
+            )
+
         self.assertTrue(all(item["used_by_model"] for item in payload["model_features"]))
 
     def test_all_displayed_indicators_have_real_weighted_contributions(self):
@@ -105,6 +115,20 @@ class FeatureParticipationTests(unittest.TestCase):
             set(backend.INDICATOR_WEIGHTS)
         )
         self.assertTrue(all(item["used_in_final_score"] for item in payload["indicators"]))
+
+    def test_shortener_with_lookalike_brand_path_is_phishing(self):
+        payload = self.predict("https://goo.su/i.whatAapp")
+        indicators = {
+            item["name"]: item
+            for item in payload["indicators"]
+        }
+
+        self.assertEqual(payload["prediction"], 1)
+        self.assertEqual(payload["decision"], "Phishing")
+        self.assertTrue(payload["critical_phishing"])
+        self.assertGreaterEqual(payload["risk_score"], 80)
+        self.assertGreaterEqual(indicators["brandVerification"]["score"], 90)
+        self.assertGreaterEqual(indicators["urlStructure"]["score"], 90)
 
 
 if __name__ == "__main__":

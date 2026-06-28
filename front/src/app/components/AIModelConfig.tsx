@@ -8,24 +8,20 @@ import { Brain, CheckCircle, XCircle, AlertCircle, Loader2, ArrowLeft } from 'lu
 import { Textarea } from './ui/textarea';
 
 interface AIModelConfigProps {
+  accessToken: string;
   onDetectionComplete?: (result: any) => void;
   onBack?: () => void;
 }
 
-export function AIModelConfig({ onDetectionComplete, onBack }: AIModelConfigProps) {
-  const [apiEndpoint, setApiEndpoint] = useState('');
-  const [apiKey, setApiKey] = useState('');
+const PHISHGUARD_API = 'https://a206197xiatianzephishguard-api.onrender.com/predict';
+
+export function AIModelConfig({ accessToken, onDetectionComplete, onBack }: AIModelConfigProps) {
   const [testUrl, setTestUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
 
   const handleTestDetection = async () => {
-    if (!apiEndpoint) {
-      setError('Please enter your AI API endpoint');
-      return;
-    }
-
     if (!testUrl) {
       setError('Please enter a URL to test');
       return;
@@ -45,12 +41,10 @@ export function AIModelConfig({ onDetectionComplete, onBack }: AIModelConfigProp
           headers: {
             'Content-Type': 'application/json',
             'apikey': publicAnonKey,
-            'Authorization': `Bearer ${publicAnonKey}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             url: testUrl,
-            apiEndpoint,
-            apiKey: apiKey || undefined,
           }),
         }
       );
@@ -111,26 +105,8 @@ export function AIModelConfig({ onDetectionComplete, onBack }: AIModelConfigProp
                 <Input
                   id="api-endpoint"
                   type="url"
-                  placeholder="https://api.example.com/predict"
-                  value={apiEndpoint}
-                  onChange={(e) => setApiEndpoint(e.target.value)}
-                  className="font-mono"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="api-key" className="text-base font-semibold">
-                  API Key (Optional)
-                </Label>
-                <p className="text-sm text-gray-600 mb-2">
-                  If your API requires authentication, enter your API key here
-                </p>
-                <Input
-                  id="api-key"
-                  type="password"
-                  placeholder="Enter your API key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
+                  value={PHISHGUARD_API}
+                  disabled
                   className="font-mono"
                 />
               </div>
@@ -189,7 +165,7 @@ Authorization: Bearer {api-key}
 
                 <Button
                   onClick={handleTestDetection}
-                  disabled={loading || !apiEndpoint || !testUrl}
+                  disabled={loading || !testUrl}
                   className="w-full"
                   size="lg"
                 >

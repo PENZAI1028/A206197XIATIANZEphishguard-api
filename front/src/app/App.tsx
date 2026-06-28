@@ -26,7 +26,7 @@ export default function App() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.access_token && session.user) {
-        const role = session.user.user_metadata?.role || 'user';
+        const role = session.user.app_metadata?.role || 'user';
 
         setAccessToken(session.access_token);
         setUserEmail(session.user.email || '');
@@ -93,6 +93,7 @@ export default function App() {
   if (view === 'ai-config') {
     return (
       <AIModelConfig
+        accessToken={accessToken!}
         onDetectionComplete={(result) => {
           console.log('AI Detection result:', result);
         }}
@@ -104,9 +105,9 @@ export default function App() {
   return (
     <PhishingDetector
       accessToken={accessToken || undefined}
-      onViewDashboard={accessToken ? () => setView('dashboard') : undefined}
+      onViewDashboard={accessToken && userRole === 'admin' ? () => setView('dashboard') : undefined}
       onLogin={!accessToken ? () => setView('auth') : undefined}
-      onViewAIConfig={() => setView('ai-config')}
+      onViewAIConfig={accessToken && userRole === 'admin' ? () => setView('ai-config') : undefined}
     />
   );
 }

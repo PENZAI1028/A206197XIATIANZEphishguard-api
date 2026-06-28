@@ -14,7 +14,7 @@ interface AuthFormProps {
 
 export function AuthForm({ onLoginSuccess, onSkipLogin }: AuthFormProps) {
   const [email, setEmail] = useState('a206197@siswa.ukm.edu.my');
-  const [password, setPassword] = useState('Xyd20050801');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,12 +46,8 @@ export function AuthForm({ onLoginSuccess, onSkipLogin }: AuthFormProps) {
       }
 
       if (data.session && data.user) {
-        console.log('Login successful, user metadata:', data.user.user_metadata);
-        
         // Check if user is admin
-        const role = data.user.user_metadata?.role;
-
-        console.log('User role:', role);
+        const role = data.user.app_metadata?.role;
 
         if (role !== 'admin') {
           setError('Access denied. This login is for administrators only.');
