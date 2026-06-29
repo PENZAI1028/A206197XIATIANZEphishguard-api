@@ -1,52 +1,56 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import importlib
 import joblib
 import json
 import re
-import sys
 import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 from difflib import SequenceMatcher
+import sys
 
-# Keep the backend directory importable whether the server starts with:
-#   gunicorn app:app               (Render start directory = backend)
-# or a local package import:
-#   from backend.app import app    (project root is on sys.path)
-#
-# Older joblib model bundles refer to these modules by their top-level names.
 BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-MODEL_COMPATIBILITY_IMPORTS = {}
-for _module_name in (
-    "phishguard_ml_features",
-    "phishguard_streaming_model",
-    "phishguard_streaming_model_v7",
-    "phishguard_v8_model",
-    "phishguard_v9_model",
+# Keep custom joblib classes importable whether Flask is started as app:app or
+# imported as backend.app during local tests.
+for _module_name, _class_name in (
+    ("phishguard_v8_model", "PhishGuardURLModelV8"),
+    ("phishguard_v9_model", "PhishGuardURLModelV9"),
+    ("phishguard_v10_model", "PhishGuardURLModelV10"),
+    ("phishguard_v11_model", "PhishGuardURLModelV11"),
 ):
     try:
-        MODEL_COMPATIBILITY_IMPORTS[_module_name] = importlib.import_module(_module_name)
+        globals()[_class_name] = getattr(__import__(_module_name, fromlist=[_class_name]), _class_name)
     except Exception:
-        MODEL_COMPATIBILITY_IMPORTS[_module_name] = None
+        globals()[_class_name] = None
 
-# Keep v8 class resolvable when a v8 model bundle is deployed.
-PhishGuardURLModelV8 = getattr(
-    MODEL_COMPATIBILITY_IMPORTS.get("phishguard_v8_model"),
-    "PhishGuardURLModelV8",
-    None,
-)
+try:
+    from reputation_store import get_store_metadata, lookup_reputation
+except Exception as _reputation_import_error:
+    def get_store_metadata():
+        return {
+            "available": False,
+            "generated_at_utc": None,
+            "age_days": None,
+            "stale": False,
+            "counts": {"url_fingerprints": 0, "hosts": 0, "roots": 0},
+            "load_error": f"reputation module unavailable: {_reputation_import_error}",
+        }
 
-PhishGuardURLModelV9 = getattr(
-    MODEL_COMPATIBILITY_IMPORTS.get("phishguard_v9_model"),
-    "PhishGuardURLModelV9",
-    None,
-)
+    def lookup_reputation(url):
+        return {
+            **get_store_metadata(),
+            "match": False,
+            "match_type": None,
+            "score": 0,
+            "sources": [],
+            "normalized_host": "",
+            "root_domain": "",
+        }
 
 app = Flask(__name__)
 CORS(app)
@@ -54,17 +58,16 @@ CORS(app)
 # =========================
 # Model loading
 # =========================
-MODEL_PATH = BACKEND_DIR / "phishing_web_model.pkl"
 try:
-    model = joblib.load(MODEL_PATH)
+    model = joblib.load(Path(__file__).with_name("phishing_web_model.pkl"))
     MODEL_LOAD_ERROR = None
 except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "4.4"
-MODEL_NAME = "PhishGuard Defense-in-Depth URL Risk Classifier"
-SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + Dynamic Critical-Evidence Aggregation"
+API_VERSION = "4.4.1"
+MODEL_NAME = "PhishGuard URL Risk Classifier"
+SCORE_METHOD = "Auditable URL Scoring + Safe Local Reputation Evidence Policy"
 AI_WEIGHT = 0.18
 
 MODEL_FEATURE_NAMES = [
@@ -103,7 +106,10 @@ INDICATOR_WEIGHTS = {
     "urlStructure": 0.10,
     "suspiciousKeywords": 0.10,
     "httpsUsage": 0.05,
-    "urlLengthComplexity": 0.05
+    "urlLengthComplexity": 0.05,
+    # Reputation is a separately documented evidence override, not a learned
+    # percentage contribution. Its risk floor is applied after URL scoring.
+    "reputationEvidence": 0.0
 }
 
 INDICATOR_DEFINITIONS = {
@@ -138,6 +144,10 @@ INDICATOR_DEFINITIONS = {
     "urlLengthComplexity": {
         "label": "URL Length and Complexity",
         "method": "Measures URL length and special-character count."
+    },
+    "reputationEvidence": {
+        "label": "Local Malicious Reputation",
+        "method": "Checks an offline store built from local PhishTank, OpenPhish and URLHaus snapshots. A match is historical evidence and includes store age."
     }
 }
 
@@ -891,20 +901,8 @@ def build_model_feature_audit(features, url=None):
     """
     Supports both:
       1) legacy 22-numeric-feature sklearn models; and
-      2) URL model bundles trained by the v4/v8 training scripts.
-
-    When the serialized model cannot be loaded, return an explicit audit item
-    instead of pretending that model features were used.
+      2) the v4 URL model bundle trained by training/train_url_model.py.
     """
-    if model is None:
-        return [{
-            "name": "model_unavailable",
-            "value": MODEL_LOAD_ERROR or "Model file could not be loaded.",
-            "used_by_model": False,
-            "model_importance": None,
-            "model_importance_percent": None
-        }]
-
     if is_url_model_bundle():
         manifest = model.get("feature_manifest", [])
         if not manifest:
@@ -1109,6 +1107,84 @@ def indicator(name, score, status, explanation, value=None, weight=None):
 # =========================
 # Indicator detection
 # =========================
+
+def detect_reputation_evidence(url, domain):
+    """Return local-feed evidence without allowing broad historical records to
+    override verified official domains or unrelated sibling subdomains.
+
+    Policy:
+    - a verified official hostname is not made High Risk merely because a
+      historical feed contains a host-level record for that provider;
+    - exact URL matches remain the strongest evidence for unknown domains;
+    - a single-source record on a registrable root is intentionally a warning,
+      not a block, because public services and reclaimed domains can appear in
+      old feeds;
+    - root-only evidence is returned by the store as non-blocking context.
+    """
+    evidence = lookup_reputation(url)
+    official, brand, matched = domain_is_official(domain)
+
+    if official:
+        return indicator(
+            "reputationEvidence",
+            0,
+            "safe",
+            (
+                "No local reputation override was applied because the hostname matches "
+                f"the verified official domain '{matched}'. Historical host/root feed "
+                "records are not sufficient to classify a verified provider domain as phishing."
+            ),
+            {
+                **evidence,
+                "override_suppressed": True,
+                "suppression_reason": "verified_official_domain",
+                "official_brand": brand,
+                "official_matched_domain": matched,
+            },
+            "rule override"
+        )
+
+    if evidence.get("match"):
+        score = int(evidence.get("score", 0))
+        match_type = evidence.get("match_type") or "unknown"
+        sources = ", ".join(evidence.get("sources") or []) or "local feed"
+        stale_note = (
+            " The local store is older than 30 days, so this is presented as historical evidence."
+            if evidence.get("stale") else ""
+        )
+        return indicator(
+            "reputationEvidence",
+            score,
+            "danger" if score >= 80 else "warning",
+            (
+                f"Local malicious reputation evidence ({match_type}) from: {sources}. "
+                "This is offline historical-feed evidence, not a live network lookup."
+                + stale_note
+            ),
+            evidence,
+            "rule override"
+        )
+
+    if evidence.get("context_match"):
+        metadata_note = (
+            "Historical root-domain context was found, but it was not used as a risk override. "
+            "A record for one hostname must not automatically condemn unrelated sibling subdomains."
+        )
+    else:
+        metadata_note = (
+            "The local reputation store is unavailable; no reputation evidence was applied."
+            if not evidence.get("available") else
+            "No local malicious reputation match was found. This does not prove the URL is safe."
+        )
+
+    return indicator(
+        "reputationEvidence",
+        0,
+        "warning" if not evidence.get("available") else "safe",
+        metadata_note,
+        evidence,
+        "rule override"
+    )
 
 def detect_official_domain(domain):
     official, brand, matched = domain_is_official(domain)
@@ -1653,42 +1729,26 @@ def analyse_url(url):
     indicators = []
 
     official_indicator = detect_official_domain(domain)
-    indicators.append(official_indicator)
+    reputation_indicator = detect_reputation_evidence(url, domain)
+    indicators.extend([official_indicator, reputation_indicator])
 
-    # AI Model
-    # Rules stay active even if an older serialized model cannot be loaded.
-    # This is important for critical look-alike domains such as b1nance.com:
-    # a missing optional model module must not turn a high-risk URL into a
-    # server error or a false "Trusted" result.
+    # AI Model. Rules and reputation evidence must still provide a clear result
+    # when an old joblib model cannot be imported on a deployment environment.
     features = extract_url_features(url)
     model_feature_audit = build_model_feature_audit(features, url=url)
-    feature_ai_probability = estimate_feature_ai_probability(
-        url, domain, scheme, path, query, official_domain
-    )
-
-    ai_model_available = model is not None
-    ai_model_error = None
-
-    if ai_model_available:
-        try:
-            raw_ai_phishing_probability, ai_confidence = get_phishing_probability(
-                features, url=url
-            )
-            calibrated_ai_phishing_probability = calibrate_ai_probability(
-                raw_ai_phishing_probability,
-                feature_ai_probability
-            )
-        except RuntimeError as exc:
-            ai_model_available = False
-            ai_model_error = str(exc)
-            raw_ai_phishing_probability = feature_ai_probability
-            ai_confidence = 0.0
-            calibrated_ai_phishing_probability = feature_ai_probability
-    else:
-        ai_model_error = MODEL_LOAD_ERROR or "Model file could not be loaded."
+    feature_ai_probability = estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain)
+    model_prediction_error = None
+    try:
+        raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features, url=url)
+        calibrated_ai_phishing_probability = calibrate_ai_probability(
+            raw_ai_phishing_probability,
+            feature_ai_probability
+        )
+    except RuntimeError as exc:
+        model_prediction_error = str(exc)
         raw_ai_phishing_probability = feature_ai_probability
-        ai_confidence = 0.0
         calibrated_ai_phishing_probability = feature_ai_probability
+        ai_confidence = 0.0
 
     raw_ai_score = int(round(raw_ai_phishing_probability * 100))
     feature_ai_score = int(round(feature_ai_probability * 100))
@@ -1707,24 +1767,22 @@ def analyse_url(url):
     else:
         ai_score = calibrated_ai_score
         effective_ai_probability = calibrated_ai_phishing_probability
-        if ai_model_available:
-            ai_explanation = (
-                f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
-                f"Calibrated AI-assisted probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
-                f"Effective AI risk used for weighting: {ai_score}/100."
-            )
-        else:
-            ai_explanation = (
-                "The serialized AI model is currently unavailable. "
-                "This AI-assisted score is a rule-based lexical fallback; "
-                "critical domain, typo-squatting, and URL-structure rules remain active. "
-                f"Fallback risk used for weighting: {ai_score}/100."
-            )
+        ai_explanation = (
+            f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
+            f"Calibrated AI-assisted probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
+            f"Effective AI risk used for weighting: {ai_score}/100."
+        )
+
+    if model_prediction_error:
+        ai_explanation = (
+            "AI model prediction is unavailable; the displayed AI-assisted risk uses "
+            "lexical URL evidence only. " + model_prediction_error
+        )
 
     indicators.append(indicator(
         "aiModelProbability",
         ai_score,
-        "danger" if ai_score >= 70 else "warning" if ai_score >= 35 else "safe",
+        "warning" if model_prediction_error else ("danger" if ai_score >= 70 else "warning" if ai_score >= 35 else "safe"),
         ai_explanation,
         {
             "phishing_probability": round(effective_ai_probability, 4),
@@ -1746,9 +1804,6 @@ def analyse_url(url):
             "weighted_contribution_points": round(ai_score * AI_WEIGHT, 2),
             "confidence": round(ai_confidence, 4),
             "confidence_percent": round(ai_confidence * 100, 2),
-            "model_available": ai_model_available,
-            "model_fallback_mode": not ai_model_available,
-            "model_error": ai_model_error,
             "model_feature_count": len(model_feature_audit),
             "model_features_used_count": sum(
                 1 for item in model_feature_audit if item["used_by_model"]
@@ -1789,10 +1844,12 @@ def analyse_url(url):
     https_score = score_by_name.get("httpsUsage", 0)
     length_score = score_by_name.get("urlLengthComplexity", 0)
     official_score = score_by_name.get("officialDomain", 0)
+    reputation_score = score_by_name.get("reputationEvidence", 0)
 
     official_clean = (
         official_domain
         and official_score == 0
+        and reputation_score == 0
         and brand_score == 0
         and homograph_score == 0
         and structure_score == 0
@@ -1834,10 +1891,12 @@ def analyse_url(url):
             raise RuntimeError(f"Displayed indicator '{name}' is not connected to the scoring formula.")
 
         contribution = item["score"] * weight
-        item["used_in_final_score"] = True
-        item["weight"] = f"{weight * 100:g}%"
+        item["used_in_final_score"] = weight > 0
+        item["weight"] = "rule override" if name == "reputationEvidence" else f"{weight * 100:g}%"
         item["weight_percent"] = round(weight * 100, 2)
         item["weighted_contribution_points"] = round(contribution, 2)
+        if name == "reputationEvidence":
+            item["used_as_reputation_override"] = True
         weighted_score += contribution
 
     weighted_score_before_overrides = round(weighted_score, 2)
@@ -1849,6 +1908,9 @@ def analyse_url(url):
 
     if official_score >= 90:
         critical_reasons.append("look-alike official domain")
+
+    if reputation_score >= 90:
+        critical_reasons.append("local malicious reputation match")
 
     if homograph_score >= 90:
         critical_reasons.append("homograph or typo-squatting domain")
@@ -1912,6 +1974,17 @@ def analyse_url(url):
             applied_overrides.append(
                 "dynamic critical-evidence floor: "
                 f"{signal_summary} produced {critical_evidence_score}/100"
+            )
+        risk_score = overridden_score
+
+    # A recent local malicious-feed match is independent evidence. It is not
+    # mixed into the ML score: a known bad URL or hostname must not be lowered
+    # by a weak lexical prediction.
+    if reputation_score > 0:
+        overridden_score = max(risk_score, reputation_score)
+        if overridden_score != risk_score:
+            applied_overrides.append(
+                f"local reputation evidence floor: final risk raised to {reputation_score}"
             )
         risk_score = overridden_score
 
@@ -1985,9 +2058,8 @@ def analyse_url(url):
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
         "model_load_error": MODEL_LOAD_ERROR,
-        "ai_model_available": ai_model_available,
-        "ai_model_fallback_mode": not ai_model_available,
-        "ai_model_error": ai_model_error,
+        "model_prediction_error": model_prediction_error,
+        "reputation_evidence": reputation_indicator.get("value"),
         "ai_phishing_probability": round(effective_ai_probability, 4),
         "ai_phishing_probability_percent": round(effective_ai_probability * 100, 2),
         "effective_ai_probability": round(effective_ai_probability, 4),
@@ -2070,7 +2142,7 @@ def home():
         "api_version": API_VERSION,
         "model_loaded": model is not None,
         "model_load_error": MODEL_LOAD_ERROR,
-        "model_path": MODEL_PATH.name,
+        "reputation_store": get_store_metadata(),
         "trusted_domain_config_loaded": TRUSTED_DOMAIN_CONFIG["loaded_from_file"],
         "trusted_domain_config_error": TRUSTED_DOMAIN_CONFIG["load_error"]
     })
@@ -2086,7 +2158,8 @@ def scoring_config():
             "label": definition["label"],
             "method": definition["method"],
             "weight_percent": round(weight * 100, 2),
-            "used_in_final_score": True
+            "used_in_final_score": weight > 0,
+            "scoring_mode": "rule_override" if name == "reputationEvidence" else "weighted"
         })
 
     return jsonify({
@@ -2109,8 +2182,7 @@ def scoring_config():
         "limitations": [
             "HTTPS Usage checks only the submitted URL scheme.",
             "The API does not connect to the destination or validate its TLS certificate.",
-            "No WHOIS, DNS age, live blacklist, or external reputation lookup is performed.",
-            "Trusted-domain matching verifies ownership patterns only; it cannot confirm that a specific hosted page or account is safe."
+            "No WHOIS, DNS age, live blacklist, or external reputation lookup is performed."
         ]
     })
 
@@ -2177,6 +2249,7 @@ def predict():
         "ai_weight_percent": model_info["ai_weight_percent"],
         "ai_weighted_contribution_points": model_info["ai_weighted_contribution_points"],
         "model_features": model_info["model_features"],
+        "reputation_evidence": model_info["reputation_evidence"],
         "score_audit": {
             "indicator_weights": model_info["indicator_weights"],
             "indicator_weight_total_percent": model_info["indicator_weight_total_percent"],

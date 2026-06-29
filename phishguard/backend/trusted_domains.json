@@ -859,6 +859,9 @@
     "zoom": [
       "zoom.com",
       "zoom.us"
+    ],
+    "gravatar": [
+      "gravatar.com"
     ]
   },
   "exact_only_official_domains": [
@@ -872,7 +875,8 @@
     "t.me",
     "tinyurl.com",
     "wa.me",
-    "youtu.be"
+    "youtu.be",
+    "gravatar.com"
   ],
   "shared_hosting_domains": [
     "amazonaws.com",
