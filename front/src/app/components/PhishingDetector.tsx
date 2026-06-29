@@ -89,7 +89,7 @@ interface PhishingDetectorProps {
 
 // ─── Tier config ───────────────────────────────────────────────────────────
 
-type Tier = 'verified-official' | 'low-risk' | 'suspicious' | 'high-risk';
+type Tier = 'trusted' | 'low-risk' | 'suspicious' | 'high-risk';
 
 function isVerifiedOfficialDomain(result: AIResult): boolean {
   const indicator = result.indicators?.find(item => item.name === 'officialDomain');
@@ -101,15 +101,19 @@ function isVerifiedOfficialDomain(result: AIResult): boolean {
   return typeof value.matched_domain === 'string' && value.matched_domain.length > 0;
 }
 
-function getTier(riskScore: number, verifiedOfficial: boolean): Tier {
+function getTier(riskScore: number): Tier {
   if (riskScore >= 80) return 'high-risk';
   if (riskScore >= 45) return 'suspicious';
-  if (verifiedOfficial && riskScore <= 19) return 'verified-official';
-  return 'low-risk';
+  if (riskScore >= 20) return 'low-risk';
+  return 'trusted';
+}
+
+function riskBandLabel(tier: Tier): string {
+  return TIER[tier].heading;
 }
 
 const TIER = {
-  'verified-official': {
+  trusted: {
     card: 'border-green-500 bg-green-50',
     badgeCls: 'bg-green-600 text-white',
     title: 'text-green-800',
@@ -117,8 +121,8 @@ const TIER = {
     leftBorder: 'border-l-green-500',
     Icon: CheckCircle,
     iconCls: 'text-green-600',
-    heading: 'Verified Official Domain',
-    body: 'This URL matches the verified official-domain registry.',
+    heading: 'Trusted',
+    body: 'The backend returned a final risk score in the Trusted band.',
   },
   'low-risk': {
     card: 'border-blue-500 bg-blue-50',
@@ -128,8 +132,8 @@ const TIER = {
     leftBorder: 'border-l-blue-500',
     Icon: CheckCircle,
     iconCls: 'text-blue-600',
-    heading: 'Low Risk Score',
-    body: 'The active scoring engine produced a low risk score for this URL.',
+    heading: 'Low Risk',
+    body: 'The backend returned a final risk score in the Low Risk band.',
   },
   suspicious: {
     card: 'border-yellow-500 bg-yellow-50',
@@ -139,8 +143,8 @@ const TIER = {
     leftBorder: 'border-l-yellow-500',
     Icon: AlertTriangle,
     iconCls: 'text-yellow-600',
-    heading: 'Suspicious Risk Evidence Detected',
-    body: 'This URL triggered elevated-risk indicators in the active analysis.',
+    heading: 'Suspicious',
+    body: 'The backend returned a final risk score in the Suspicious band.',
   },
   'high-risk': {
     card: 'border-red-500 bg-red-50',
@@ -150,17 +154,13 @@ const TIER = {
     leftBorder: 'border-l-red-500',
     Icon: XCircle,
     iconCls: 'text-red-600',
-    heading: 'High-Risk URL Evidence Detected',
-    body: 'This URL triggered high-risk URL indicators in the active analysis.',
+    heading: 'High Risk',
+    body: 'The backend returned a final risk score in the High Risk band.',
   },
 } satisfies Record<Tier, object>;
 
 function historyLabel(item: HistoryItem): string {
-  const tier = getTier(
-    item.risk_score,
-    Boolean(item.verified_official),
-  );
-  return TIER[tier].heading;
+  return riskBandLabel(getTier(item.risk_score));
 }
 
 // ─── Indicator name mapping ─────────────────────────────────────────────────
@@ -178,15 +178,15 @@ const FRIENDLY_NAMES: Record<string, string> = {
 };
 
 const CHART_LABELS: Record<string, string> = {
-  officialDomain: 'Official Domain',
-  aiModelProbability: 'AI Model',
-  brandVerification: 'Brand Verification',
-  homographAttack: 'Homograph Attack',
+  officialDomain: 'Official Domain Verification',
+  aiModelProbability: 'Calibrated AI-Assisted Risk',
+  brandVerification: 'Brand Impersonation',
+  homographAttack: 'Homograph & Typosquatting',
   urlStructure: 'URL Structure',
-  suspiciousKeywords: 'Keywords',
+  suspiciousKeywords: 'Suspicious Keywords',
   httpsUsage: 'HTTPS Usage',
-  urlLengthComplexity: 'URL Length',
-  reputationEvidence: 'Offline Reputation',
+  urlLengthComplexity: 'URL Length & Complexity',
+  reputationEvidence: 'Offline Malicious Reputation Evidence',
 };
 
 function friendlyName(raw: string) {
@@ -261,11 +261,11 @@ function evidenceStatements(indicator: Indicator): string[] {
       const protectedParent = asText(record.protected_parent_domain);
       const matchedTerm = asText(record.matched_term || record.matched_token);
       if (brand) statements.push(`Protected brand: ${brand}.`);
-      if (domain) statements.push(`Detected domain: ${domain}.`);
+      if (domain) statements.push(`User-entered domain: ${domain}.`);
       if (registryEntry) {
-        statements.push(`Verified official root: ${rootDomain(registryEntry)}.`);
+        statements.push(`Official reference root: ${rootDomain(registryEntry)}.`);
         if (registryEntry !== rootDomain(registryEntry)) {
-          statements.push(`Verified official registry entry: ${registryEntry}.`);
+          statements.push(`Official registry reference: ${registryEntry}.`);
         }
       }
       if (protectedParent) statements.push(`Protected official parent domain: ${protectedParent}.`);
@@ -297,7 +297,7 @@ function evidenceStatements(indicator: Indicator): string[] {
       const domain = asText(record.domain || record.root_domain);
       const term = asText(record.matched_term || record.matched_token);
       if (brand) statements.push(`Protected brand evidence: ${brand}.`);
-      if (domain) statements.push(`Detected domain: ${domain}.`);
+      if (domain) statements.push(`User-entered domain: ${domain}.`);
       if (term) statements.push(`Protected brand token: ${term}.`);
       statements.push(`Brand-impersonation risk points: ${score}/100.`);
       return statements;
@@ -309,8 +309,8 @@ function evidenceStatements(indicator: Indicator): string[] {
       const official = asText(record.matched_official || record.matched_official_source);
       const token = asText(record.matched_term || record.matched_token);
       if (brand) statements.push(`Protected brand evidence: ${brand}.`);
-      if (domain) statements.push(`Detected domain: ${domain}.`);
-      if (official) statements.push(`Verified official root: ${rootDomain(official)}.`);
+      if (domain) statements.push(`User-entered domain: ${domain}.`);
+      if (official) statements.push(`Official reference root: ${rootDomain(official)}.`);
       if (token) statements.push(`Similarity token: ${token}.`);
       statements.push(`Homograph and typosquatting risk points: ${score}/100.`);
       return statements;
@@ -376,6 +376,45 @@ function evidenceStatements(indicator: Indicator): string[] {
 }
 
 function renderEvidenceDetails(indicator: Indicator): React.ReactNode {
+  const record = asRecord(indicator.value);
+  const score = indicator.risk_points ?? indicator.score ?? 0;
+  const riskDomain = score > 0 || indicator.status === 'danger' || indicator.status === 'warning';
+  const enteredDomain = asText(record.domain || record.root_domain);
+  const officialRegistry = asText(
+    record.matched_domain || record.matched_official || record.matched_official_source
+  );
+  const brand = asText(record.brand || record.matched_brand);
+  const token = asText(record.matched_term || record.matched_token);
+
+  if (['officialDomain', 'brandVerification', 'homographAttack'].includes(indicator.name)) {
+    const enteredClass = riskDomain
+      ? 'font-mono font-semibold text-red-700'
+      : 'font-mono font-semibold text-green-700';
+    const officialClass = 'font-mono font-semibold text-green-700';
+    const lines = evidenceStatements(indicator).filter(
+      line => !line.startsWith('User-entered domain:')
+        && !line.startsWith('Official reference root:')
+        && !line.startsWith('Official registry reference:')
+        && !line.startsWith('Protected brand:')
+        && !line.startsWith('Protected brand evidence:')
+        && !line.startsWith('Protected brand token:')
+        && !line.startsWith('Similarity token:'),
+    );
+
+    return (
+      <ul className="space-y-1 text-xs text-gray-700">
+        {brand && <li>Protected brand: <span className="font-mono font-medium text-indigo-700">{brand}</span>.</li>}
+        {enteredDomain && <li>User-entered domain: <span className={enteredClass}>{enteredDomain}</span>.</li>}
+        {officialRegistry && <li>Official reference root: <span className={officialClass}>{rootDomain(officialRegistry)}</span>.</li>}
+        {officialRegistry && officialRegistry !== rootDomain(officialRegistry) && (
+          <li>Official registry reference: <span className={officialClass}>{officialRegistry}</span>.</li>
+        )}
+        {token && <li>Protected brand token: <span className="font-mono font-medium text-indigo-700">{token}</span>.</li>}
+        {lines.map((line, index) => <li key={`${indicator.name}-${index}`}>{line}</li>)}
+      </ul>
+    );
+  }
+
   const lines = evidenceStatements(indicator);
   return (
     <ul className="space-y-1 text-xs text-gray-700">
@@ -396,8 +435,14 @@ function actionGuidance(result: AIResult, tier: Tier, verifiedOfficial: boolean)
     return guidance;
   }
 
+  if (tier === 'trusted') {
+    guidance.push('Analysis record: Trusted risk band with the displayed indicator evidence.');
+    guidance.push('Service access path: confirm the provider domain through an official channel.');
+    return guidance;
+  }
+
   if (tier === 'low-risk') {
-    guidance.push('Analysis record: low risk score with the displayed indicator evidence.');
+    guidance.push('Analysis record: Low Risk band with the displayed indicator evidence.');
     guidance.push('Service access path: confirm the provider domain through an official channel.');
     return guidance;
   }
@@ -471,7 +516,7 @@ function printReport(result: AIResult, timestamp: string) {
   if (!win) return;
 
   const verifiedOfficial = isVerifiedOfficialDomain(result);
-  const tier = getTier(result.risk_score, verifiedOfficial);
+  const tier = getTier(result.risk_score);
   const guidance = actionGuidance(result, tier, verifiedOfficial);
   const indicators = (result.indicators ?? []).filter(
     indicator => (indicator.used_in_final_score === true || indicator.used_as_reputation_override === true)
@@ -500,7 +545,7 @@ function printReport(result: AIResult, timestamp: string) {
       <tr><th>Result Classification</th><td>${escapeHtml(TIER[tier].heading)}</td></tr>
       <tr><th>Risk Score</th><td>${result.risk_score} / 100</td></tr>
       <tr><th>Derived Safety Score</th><td>${result.safety_score} / 100</td></tr>
-      <tr><th>Critical Rule Trigger</th><td>${result.critical_phishing ? 'Recorded' : '0'}</td></tr>
+      <tr><th>Critical Rule Application</th><td>${result.critical_phishing ? 'Applied' : '—'}</td></tr>
     </table>
     <div class="note">Derived Safety Score = 100 - Final Risk Score.</div>
     <h2>Action Guidance</h2>
@@ -565,7 +610,7 @@ export function PhishingDetector({
 
       // Save to history
       const verifiedOfficial = isVerifiedOfficialDomain(data);
-      const resultTier = getTier(data.risk_score, verifiedOfficial);
+      const resultTier = getTier(data.risk_score);
       const histItem: HistoryItem = {
         url: data.url ?? trimmed,
         result: TIER[resultTier].heading,
@@ -616,7 +661,7 @@ export function PhishingDetector({
   // ─── Derived ──────────────────────────────────────────────────────────────
   const verifiedOfficial = result ? isVerifiedOfficialDomain(result) : false;
   const tier = result
-    ? getTier(result.risk_score, verifiedOfficial)
+    ? getTier(result.risk_score)
     : null;
   const styles = tier ? TIER[tier] : null;
 
@@ -637,12 +682,12 @@ export function PhishingDetector({
     ...ruleOverrideIndicators,
   ];
 
-  const radarData = displayedIndicators.map(ind => ({
+  const radarData = participatingIndicators.map(ind => ({
     feature: chartLabel(ind.name),
     score: ind.risk_points ?? ind.score ?? 0,
   }));
 
-  const barData = displayedIndicators.map(ind => ({
+  const barData = participatingIndicators.map(ind => ({
     name: chartLabel(ind.name),
     'Risk Points': ind.risk_points ?? ind.score ?? 0,
   }));
@@ -771,12 +816,13 @@ export function PhishingDetector({
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h2 className={`text-xl font-bold ${styles.title}`}>{styles.heading}</h2>
                       <Badge className={styles.badgeCls}>
-                        Risk band: {tier === 'verified-official' ? 'Verified Official Domain' :
-                          tier === 'low-risk' ? 'Low Risk' :
-                          tier === 'suspicious' ? 'Suspicious' : 'High Risk'}
+                        Risk band: {riskBandLabel(tier)}
                       </Badge>
+                      {verifiedOfficial && (
+                        <Badge className="bg-green-700 text-white">Verified Official Domain</Badge>
+                      )}
                       {result.critical_phishing && (
-                        <Badge className="bg-red-900 text-white">Critical Rule Triggered</Badge>
+                        <Badge className="bg-red-900 text-white">Critical Rule Applied</Badge>
                       )}
                     </div>
                     <p className={`text-sm ${styles.text}`}>{styles.body}</p>
@@ -871,21 +917,24 @@ export function PhishingDetector({
                         <div className="mt-1">{renderEvidenceDetails(indicator)}</div>
                       </div>
                     ))}
-                    {result.score_audit?.critical_evidence_score != null && (
-                      <>
-                        <p className="mt-2 font-semibold">Dynamic critical-evidence calculation:</p>
-                        <ul className="ml-4 space-y-0.5 list-disc list-inside">
+                    {result.critical_phishing && result.score_audit?.critical_evidence_score != null && (
+                      <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-red-900">
+                        <p className="font-semibold">Critical Rule Application</p>
+                        <p className="mt-1">The backend evaluated the three highest active indicator scores.</p>
+                        <ul className="ml-4 mt-2 space-y-0.5 list-disc list-inside">
                           {result.score_audit.critical_top_signals.map(signal => (
                             <li key={signal.name}>
-                              {friendlyName(signal.name)}: {signal.score}/100 x{' '}
-                              {signal.aggregation_weight_percent}%
+                              {friendlyName(signal.name)}: {signal.score}/100 × {signal.aggregation_weight_percent}%
                             </li>
                           ))}
                         </ul>
-                        <p className="font-mono">
-                          Critical evidence score = {result.score_audit.critical_evidence_score}/100
+                        <p className="mt-2 font-mono">
+                          Critical-evidence score = {result.score_audit.critical_evidence_score}/100
                         </p>
-                      </>
+                        <p className="font-mono">
+                          Final score after applied backend rules = {result.score_audit.final_risk_score}/100
+                        </p>
+                      </div>
                     )}
                     <p className="font-mono">Derived Safety Score = 100 − Final Risk Score</p>
                     <p className="font-semibold mt-2">Backend rule evaluation</p>
@@ -895,10 +944,6 @@ export function PhishingDetector({
                         <li>Offline malicious reputation evidence applied.</li>
                       )}
                       {verifiedOfficial && <li>Verified official-domain registry protection applied.</li>}
-                      {!result.critical_phishing
-                        && !verifiedOfficial
-                        && !ruleOverrideIndicators.some(indicator => (indicator.risk_points ?? indicator.score ?? 0) > 0)
-                        && <li>Final score equals the evaluated base score.</li>}
                     </ul>
                   </div>
                 </details>
@@ -1086,14 +1131,15 @@ export function PhishingDetector({
                   <TabsContent value="visualization" className="mt-5 space-y-8">
                     {radarData.length > 0 ? (
                       <>
-                        {/* Radar */}
                         <div>
-                          <h3 className="font-medium mb-1">Security Indicator Risk Points</h3>
-                          <p className="text-xs text-gray-400 mb-4">Each value equals the risk points returned by the backend.</p>
-                          <ResponsiveContainer width="100%" height={380}>
+                          <h3 className="font-medium mb-1">Base Weighted Indicator Risk Points</h3>
+                          <p className="text-xs text-gray-400 mb-4">
+                            Each value equals the risk points for an indicator in the 100% base weighted formula.
+                          </p>
+                          <ResponsiveContainer width="100%" height={420}>
                             <RadarChart data={radarData}>
                               <PolarGrid />
-                              <PolarAngleAxis dataKey="feature" tick={{ fontSize: 11 }} />
+                              <PolarAngleAxis dataKey="feature" tick={{ fontSize: 10 }} />
                               <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
                               <Radar
                                 name="Risk Points"
@@ -1107,14 +1153,22 @@ export function PhishingDetector({
                           </ResponsiveContainer>
                         </div>
 
-                        {/* Bar */}
                         <div>
-                          <h3 className="font-medium mb-1">Indicator Risk Points</h3>
-                          <p className="text-xs text-gray-400 mb-4">Each value equals the risk points returned by the backend.</p>
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={barData}>
+                          <h3 className="font-medium mb-1">Base Weighted Indicator Risk Points</h3>
+                          <p className="text-xs text-gray-400 mb-4">
+                            The chart uses the same indicator names as the detailed analysis cards.
+                          </p>
+                          <ResponsiveContainer width="100%" height={390}>
+                            <BarChart data={barData} margin={{ top: 10, right: 20, left: 0, bottom: 90 }}>
                               <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                              <XAxis
+                                dataKey="name"
+                                interval={0}
+                                angle={-35}
+                                textAnchor="end"
+                                height={100}
+                                tick={{ fontSize: 10 }}
+                              />
                               <YAxis domain={[0, 100]} />
                               <Tooltip />
                               <Legend />
@@ -1128,6 +1182,21 @@ export function PhishingDetector({
                         Visualization dataset entries: 0.
                       </p>
                     )}
+
+                    {ruleOverrideIndicators.map(indicator => (
+                      <div key={indicator.name} className="rounded-lg border border-purple-300 bg-purple-50 p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-medium text-purple-900">{friendlyName(indicator.name)} — Rule Override</h3>
+                          <Badge variant="outline" className="border-purple-300 text-purple-700">
+                            0% Base Formula Contribution
+                          </Badge>
+                        </div>
+                        <p className="mt-2 text-sm text-purple-900">
+                          Rule-override risk points: {indicator.risk_points ?? indicator.score ?? 0}/100
+                        </p>
+                        <div className="mt-2">{renderEvidenceDetails(indicator)}</div>
+                      </div>
+                    ))}
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -1185,7 +1254,7 @@ export function PhishingDetector({
                           <th className="text-left py-2 pr-3 font-medium">URL</th>
                           <th className="text-left py-2 pr-3 font-medium">Result</th>
                           <th className="text-left py-2 pr-3 font-medium">Risk</th>
-                          <th className="text-left py-2 font-medium">Critical Rule</th>
+                          <th className="text-left py-2 font-medium">Critical Rule Application</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1204,7 +1273,7 @@ export function PhishingDetector({
                               }`}>{historyLabel(h)}</Badge>
                             </td>
                             <td className="py-2 pr-3 font-mono">{h.risk_score}</td>
-                            <td className="py-2 text-gray-600">{h.critical_phishing ? 'Recorded' : '0'}</td>
+                            <td className="py-2 text-gray-600">{h.critical_phishing ? 'Applied' : '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1280,7 +1349,7 @@ export function PhishingDetector({
                           <th className="text-left py-2 pr-3 font-medium">URL</th>
                           <th className="text-left py-2 pr-3 font-medium">Result</th>
                           <th className="text-left py-2 pr-3 font-medium">Risk</th>
-                          <th className="text-left py-2 font-medium">Critical Rule</th>
+                          <th className="text-left py-2 font-medium">Critical Rule Application</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1303,7 +1372,7 @@ export function PhishingDetector({
                               }`}>{historyLabel(h)}</Badge>
                             </td>
                             <td className="py-2 pr-3 font-mono">{h.risk_score}</td>
-                            <td className="py-2 text-gray-600">{h.critical_phishing ? 'Recorded' : '0'}</td>
+                            <td className="py-2 text-gray-600">{h.critical_phishing ? 'Applied' : '—'}</td>
                           </tr>
                         ))}
                       </tbody>

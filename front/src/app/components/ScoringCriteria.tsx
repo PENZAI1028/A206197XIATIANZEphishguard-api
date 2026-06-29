@@ -42,9 +42,9 @@ const riskStyle: Record<string, {
   icon: typeof CheckCircle;
 }> = {
   Trusted: {
-    container: 'from-blue-50 to-blue-100 border-blue-500',
-    text: 'text-blue-800',
-    badge: 'bg-blue-500 text-white',
+    container: 'from-green-50 to-green-100 border-green-500',
+    text: 'text-green-800',
+    badge: 'bg-green-600 text-white',
     icon: CheckCircle,
   },
   'Low Risk': {
@@ -68,9 +68,6 @@ const riskStyle: Record<string, {
 };
 
 function displayRiskLabel(level: RiskLevel): string {
-  if (level.label === 'Trusted' || level.label === 'Low Risk') return 'Low Risk Score';
-  if (level.label === 'Suspicious') return 'Suspicious Risk Evidence Detected';
-  if (level.label === 'High Risk') return 'High-Risk URL Evidence Detected';
   return level.label;
 }
 
@@ -170,8 +167,8 @@ export function ScoringCriteria() {
             <div>
               <h3 className="mb-2 text-lg font-semibold">Risk Score Bands</h3>
               <p className="mb-4 text-sm text-gray-500">
-                Each band displays the final risk score returned by the backend. Verified Official Domain
-                status is a separate registry-match status.
+                Each label and score range matches the active backend risk-band configuration. Verified Official
+                Domain status is a separate registry-match status.
               </p>
               <div className="space-y-3">
                 {config.risk_levels.map(level => {
