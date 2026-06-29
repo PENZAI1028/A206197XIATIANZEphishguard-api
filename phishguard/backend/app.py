@@ -7,8 +7,19 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
+import sys
+
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
 from urllib.parse import urlparse
 from difflib import SequenceMatcher
+
+# Import keeps the v8 joblib class resolvable when a v8 model bundle is deployed.
+try:
+    from phishguard_v8_model import PhishGuardURLModelV8  # noqa: F401
+except Exception:
+    PhishGuardURLModelV8 = None
 
 app = Flask(__name__)
 CORS(app)
@@ -23,8 +34,8 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "4.1"
-MODEL_NAME = "PhishGuard Ensemble URL Classifier"
+API_VERSION = "4.3"
+MODEL_NAME = "PhishGuard URL Risk Classifier"
 SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + Dynamic Critical-Evidence Aggregation"
 AI_WEIGHT = 0.18
 
@@ -112,16 +123,29 @@ INDICATOR_DEFINITIONS = {
 TRUSTED_DOMAIN_FILE = Path(__file__).with_name("trusted_domains.json")
 
 DEFAULT_OFFICIAL_DOMAINS = {
-    "google": ["google.com", "accounts.google.com", "mail.google.com", "docs.google.com"],
+    "google": ["google.com", "google.com.my", "accounts.google.com", "mail.google.com"],
     "microsoft": ["microsoft.com", "cloud.microsoft", "office.com", "live.com", "outlook.com"],
     "apple": ["apple.com", "icloud.com"],
-    "render": ["render.com", "dashboard.render.com"],
     "openai": ["openai.com", "chatgpt.com"],
+    "meta": ["facebook.com", "instagram.com", "whatsapp.com"],
+    "amazon": ["amazon.com", "amazon.com.my"],
+    "paypal": ["paypal.com", "paypal.com.my"],
+    "binance": ["binance.com"],
+    "maybank": ["maybank2u.com.my", "maybank.com"],
+    "cimb": ["cimb.com.my", "cimbclicks.com.my"],
+    "touchngo": ["touchngo.com.my", "tngdigital.com.my"],
     "ukm": ["ukm.my", "ftsm.ukm.my", "siswa.ukm.edu.my"],
-    "okooo": ["okooo.com"]
+    "okooo": ["okooo.com"],
+    "render": ["render.com", "dashboard.render.com"]
 }
 
 def load_trusted_domain_config():
+    """Load and merge the deployment allowlist with safe built-in fallbacks.
+
+    The list expresses verified domain ownership only. Multi-tenant / shared
+    hosting domains are intentionally kept separate and never receive the
+    same "Trusted" treatment as a controlled official hostname.
+    """
     default = {
         "official_domains": DEFAULT_OFFICIAL_DOMAINS,
         "exact_only_official_domains": ["render.com", "dashboard.render.com"],
@@ -131,48 +155,52 @@ def load_trusted_domain_config():
     try:
         with TRUSTED_DOMAIN_FILE.open("r", encoding="utf-8") as fp:
             config = json.load(fp)
-        official = config.get("official_domains")
-        if not isinstance(official, dict) or not official:
-            raise ValueError("official_domains must be a non-empty JSON object")
+    except Exception as exc:
+        config = {}
+        load_error = str(exc)
+    else:
+        load_error = None
 
-        cleaned_official = {}
-        for brand, domains in official.items():
+    raw_official = config.get("official_domains", default["official_domains"])
+    if not isinstance(raw_official, dict):
+        raw_official = default["official_domains"]
+
+    # Merge JSON entries with fallback entries so a partial JSON file cannot
+    # silently remove core brands such as Binance, Google or Render.
+    merged = {}
+    for source in (default["official_domains"], raw_official):
+        for brand, domains in source.items():
             if not isinstance(brand, str) or not isinstance(domains, list):
                 continue
-            cleaned = sorted({
+            merged.setdefault(brand.strip().lower(), set()).update(
                 str(domain).strip().lower().lstrip(".")
                 for domain in domains
                 if isinstance(domain, str) and "." in domain
-            })
-            if cleaned:
-                cleaned_official[brand.strip().lower()] = cleaned
+            )
 
-        if not cleaned_official:
-            raise ValueError("No valid official domains found")
+    cleaned_official = {
+        brand: sorted(domains)
+        for brand, domains in merged.items()
+        if domains
+    }
+    if not cleaned_official:
+        cleaned_official = DEFAULT_OFFICIAL_DOMAINS
 
-        return {
-            "official_domains": cleaned_official,
-            "exact_only_official_domains": {
-                str(domain).strip().lower().lstrip(".")
-                for domain in config.get("exact_only_official_domains", [])
-                if isinstance(domain, str)
-            },
-            "shared_hosting_domains": {
-                str(domain).strip().lower().lstrip(".")
-                for domain in config.get("shared_hosting_domains", [])
-                if isinstance(domain, str)
-            },
-            "loaded_from_file": True,
-            "load_error": None
-        }
-    except Exception as exc:
-        return {
-            "official_domains": DEFAULT_OFFICIAL_DOMAINS,
-            "exact_only_official_domains": {"render.com", "dashboard.render.com"},
-            "shared_hosting_domains": set(),
-            "loaded_from_file": False,
-            "load_error": str(exc)
-        }
+    return {
+        "official_domains": cleaned_official,
+        "exact_only_official_domains": {
+            str(domain).strip().lower().lstrip(".")
+            for domain in config.get("exact_only_official_domains", default["exact_only_official_domains"])
+            if isinstance(domain, str)
+        },
+        "shared_hosting_domains": {
+            str(domain).strip().lower().lstrip(".")
+            for domain in config.get("shared_hosting_domains", default["shared_hosting_domains"])
+            if isinstance(domain, str)
+        },
+        "loaded_from_file": bool(config),
+        "load_error": load_error
+    }
 
 TRUSTED_DOMAIN_CONFIG = load_trusted_domain_config()
 OFFICIAL_DOMAINS = TRUSTED_DOMAIN_CONFIG["official_domains"]
@@ -191,7 +219,9 @@ PROTECTED_SERVICE_LABELS = {
     "signin", "support", "verify", "webmail", "word", "workspace", "www",
     "youtube", "zoom", "wallet", "banking", "checkout", "profile", "settings",
     "storage", "teams", "meet", "sheets", "slides", "photos", "maps", "play",
-    "ukmfolio", "siswa", "ftsm", "fism", "moodle", "elearning", "lms"
+    "ukmfolio", "siswa", "ftsm", "fism", "moodle", "elearning", "lms",
+    "binance", "coinbase", "paypal", "maybank", "cimb", "touchngo", "shopee", "lazada",
+    "github", "chatgpt", "claude", "amazon", "facebook", "instagram", "whatsapp"
 }
 
 SHORTENER_DOMAINS = {
@@ -565,6 +595,13 @@ def is_official_domain_match(domain, official):
 
 def domain_is_official(domain):
     domain = strip_www(domain)
+
+    # A legitimate provider can host arbitrary user-controlled content.
+    # Treat those domains as "ownership unknown" rather than giving a blanket
+    # safe verdict to every customer page, redirect or downloadable file.
+    if is_shared_hosting_domain(domain):
+        return False, None, None
+
     for brand, domains in OFFICIAL_DOMAINS.items():
         for official in domains:
             official = strip_www(official)
@@ -608,12 +645,16 @@ def domain_skeleton_matches_official(domain):
     return False, None, None
 
 
-def is_shared_hosting_domain(domain):
+def get_shared_hosting_provider(domain):
     domain = strip_www(domain)
-    return any(
-        domain == provider or domain.endswith("." + provider)
-        for provider in SHARED_HOSTING_DOMAINS
-    )
+    for provider in SHARED_HOSTING_DOMAINS:
+        if domain == provider or domain.endswith("." + provider):
+            return provider
+    return None
+
+
+def is_shared_hosting_domain(domain):
+    return get_shared_hosting_provider(domain) is not None
 
 
 def is_shortener_domain(domain):
@@ -642,6 +683,52 @@ def protected_brand_terms():
         {"brand": brand, "term": term, "source": source}
         for (brand, term), source in unique_terms.items()
     ]
+
+
+def find_brand_token_in_unofficial_root(domain):
+    """
+    Detect a protected brand token inside an unofficial registrable domain.
+
+    Examples caught:
+      - paypa1-secure.com  -> paypa1 normalizes to paypal
+      - paypal-login.com   -> paypal appears in an unofficial root domain
+      - g00gle-support.net -> g00gle normalizes to google
+
+    The caller must check official/shared-hosting cases first. Splitting the
+    registrable label on hyphens keeps ordinary path text out of this rule and
+    avoids the old blind spot where only whole-hostname matching was used.
+    """
+    domain = strip_www(domain)
+    root = get_root_domain(domain)
+    raw_sld = get_sld(root).lower()
+
+    raw_tokens = [
+        token for token in re.split(r"[^a-z0-9]+", raw_sld)
+        if len(token) >= 4
+    ]
+
+    for raw_token in raw_tokens:
+        token_skeleton = normalize_confusable(raw_token)
+        for entry in protected_brand_terms():
+            term = entry["term"]
+            if len(term) < 4 or token_skeleton != term:
+                continue
+
+            # The raw token may be exactly the brand (paypal-login.com) or
+            # a confusable form (paypa1-secure.com). Both are high risk when
+            # they appear in a non-official registrable domain.
+            return {
+                "brand": entry["brand"],
+                "domain": domain,
+                "root_domain": root,
+                "raw_token": raw_token,
+                "token_skeleton": token_skeleton,
+                "matched_term": term,
+                "matched_official_source": entry["source"],
+                "used_confusable_character": raw_token != term,
+            }
+
+    return None
 
 
 def find_brand_like_token(text, min_ratio=0.88):
@@ -999,6 +1086,20 @@ def detect_official_domain(domain):
             "12%"
         )
 
+    shared_provider = get_shared_hosting_provider(domain)
+    if shared_provider:
+        return indicator(
+            "officialDomain",
+            45,
+            "warning",
+            (
+                "This hostname is on a shared hosting, short-link, or user-content platform. "
+                "The provider is known, but the individual page owner and content cannot be verified by domain matching alone."
+            ),
+            {"domain": domain, "platform_root": shared_provider},
+            "12%"
+        )
+
     suspicious_subdomain, suspicious_brand, parent_domain, suspicious_labels = find_suspicious_official_subdomain(domain)
     if suspicious_subdomain:
         return indicator(
@@ -1018,6 +1119,20 @@ def detect_official_domain(domain):
             "12%"
         )
 
+    brand_token_match = find_brand_token_in_unofficial_root(domain)
+    if brand_token_match:
+        return indicator(
+            "officialDomain",
+            98,
+            "danger",
+            (
+                "Protected brand token found in an unofficial registrable domain. "
+                "This may be a brand-impersonation or typo-squatting site."
+            ),
+            brand_token_match,
+            "12%"
+        )
+
     skeleton_match, skeleton_brand, skeleton_official = domain_skeleton_matches_official(domain)
     if skeleton_match:
         return indicator(
@@ -1034,23 +1149,6 @@ def detect_official_domain(domain):
             "12%"
         )
 
-    if is_shared_hosting_domain(domain):
-        return indicator(
-            "officialDomain",
-            45,
-            "warning",
-            (
-                "This hostname is on a shared hosting or user-content platform. "
-                "The platform is legitimate, but the specific page owner and content cannot be verified by domain matching alone."
-            ),
-            {"domain": domain, "platform_root": next(
-                (provider for provider in SHARED_HOSTING_DOMAINS
-                 if domain == provider or domain.endswith("." + provider)),
-                None
-            )},
-            "12%"
-        )
-
     return indicator(
         "officialDomain",
         20,
@@ -1063,6 +1161,17 @@ def detect_official_domain(domain):
 
 def detect_brand_impersonation(domain, path="", query=""):
     official, official_brand, official_matched = domain_is_official(domain)
+    shared_provider = get_shared_hosting_provider(domain)
+
+    if shared_provider:
+        return indicator(
+            "brandVerification",
+            0,
+            "warning",
+            "This is a shared-hosting or user-content platform. The provider is known, but the individual page owner is not verified.",
+            {"domain": domain, "platform_root": shared_provider},
+            "20%"
+        )
 
     if official:
         return indicator(
@@ -1151,6 +1260,17 @@ def detect_brand_impersonation(domain, path="", query=""):
 
 def detect_homograph_attack(domain):
     official, _, _ = domain_is_official(domain)
+    shared_provider = get_shared_hosting_provider(domain)
+
+    if shared_provider:
+        return indicator(
+            "homographAttack",
+            0,
+            "warning",
+            "No domain-owner trust is inferred for this shared-hosting or user-content platform.",
+            {"domain": domain, "platform_root": shared_provider},
+            "20%"
+        )
 
     if official:
         return indicator(
@@ -1206,6 +1326,20 @@ def detect_homograph_attack(domain):
                 "tld": tld,
                 "tld_skeleton": tld_skeleton
             },
+            "20%"
+        )
+
+    brand_token_match = find_brand_token_in_unofficial_root(domain)
+    if brand_token_match:
+        return indicator(
+            "homographAttack",
+            95,
+            "danger",
+            (
+                "Brand-like token detected in an unofficial root domain. "
+                "The token is identical to, or visually confusable with, a protected brand."
+            ),
+            brand_token_match,
             "20%"
         )
 
@@ -1799,6 +1933,10 @@ def analyse_url(url):
         "critical_top_signals": critical_top_signals,
         "model_features": model_feature_audit,
         "model_feature_count": len(model_feature_audit),
+        "model_decision_threshold": (
+            model.get("metadata", {}).get("decision_threshold")
+            if is_url_model_bundle() else None
+        ),
         "indicator_weights": {
             name: round(weight * 100, 2)
             for name, weight in INDICATOR_WEIGHTS.items()
@@ -1851,7 +1989,9 @@ def home():
         "message": "PhishGuard API Running",
         "api_version": API_VERSION,
         "model_loaded": model is not None,
-        "model_load_error": MODEL_LOAD_ERROR
+        "model_load_error": MODEL_LOAD_ERROR,
+        "trusted_domain_config_loaded": TRUSTED_DOMAIN_CONFIG["loaded_from_file"],
+        "trusted_domain_config_error": TRUSTED_DOMAIN_CONFIG["load_error"]
     })
 
 

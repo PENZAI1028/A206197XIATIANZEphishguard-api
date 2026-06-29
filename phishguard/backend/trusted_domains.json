@@ -1,156 +1,45 @@
 {
-  "version": "2026-06-28-v4",
-  "description": "Curated corporate and institutional domains used only for domain-ownership verification. A verified domain does not prove that every page, file, form, or user-generated post on that domain is safe.",
   "official_domains": {
     "google": [
       "google.com",
       "google.com.my",
       "google.co.uk",
       "google.com.sg",
+      "google.co.jp",
       "accounts.google.com",
       "mail.google.com",
       "docs.google.com",
       "drive.google.com",
-      "forms.google.com",
       "calendar.google.com",
-      "meet.google.com",
       "maps.google.com",
-      "play.google.com",
-      "support.google.com",
-      "workspace.google.com",
-      "youtube.com"
+      "meet.google.com",
+      "photos.google.com",
+      "translate.google.com",
+      "news.google.com",
+      "youtube.com",
+      "youtu.be",
+      "googleapis.com",
+      "gstatic.com"
     ],
     "microsoft": [
       "microsoft.com",
       "cloud.microsoft",
       "office.com",
-      "office365.com",
       "live.com",
       "outlook.com",
       "microsoftonline.com",
+      "login.microsoftonline.com",
       "azure.com",
       "windows.com",
       "xbox.com",
-      "skype.com"
+      "linkedin.com",
+      "github.com",
+      "githubusercontent.com"
     ],
     "apple": [
       "apple.com",
       "icloud.com",
-      "appleid.apple.com",
-      "music.apple.com",
-      "support.apple.com"
-    ],
-    "amazon": [
-      "amazon.com",
-      "amazon.com.my",
-      "amazon.co.uk",
-      "amazon.sg",
-      "aws.amazon.com",
-      "primevideo.com",
-      "audible.com"
-    ],
-    "meta": [
-      "facebook.com",
-      "fb.com",
-      "instagram.com",
-      "whatsapp.com",
-      "messenger.com",
-      "meta.com"
-    ],
-    "paypal": [
-      "paypal.com",
-      "paypal.com.my"
-    ],
-    "stripe": [
-      "stripe.com"
-    ],
-    "visa": [
-      "visa.com"
-    ],
-    "mastercard": [
-      "mastercard.com"
-    ],
-    "wise": [
-      "wise.com"
-    ],
-    "revolut": [
-      "revolut.com"
-    ],
-    "americanexpress": [
-      "americanexpress.com"
-    ],
-    "alipay": [
-      "alipay.com"
-    ],
-    "wechat": [
-      "wechat.com",
-      "weixin.qq.com",
-      "qq.com"
-    ],
-    "tiktok": [
-      "tiktok.com",
-      "tiktokcdn.com"
-    ],
-    "x": [
-      "x.com",
-      "twitter.com",
-      "twimg.com"
-    ],
-    "linkedin": [
-      "linkedin.com"
-    ],
-    "reddit": [
-      "reddit.com"
-    ],
-    "discord": [
-      "discord.com",
-      "discordapp.com"
-    ],
-    "telegram": [
-      "telegram.org",
-      "t.me"
-    ],
-    "snapchat": [
-      "snapchat.com"
-    ],
-    "pinterest": [
-      "pinterest.com"
-    ],
-    "spotify": [
-      "spotify.com"
-    ],
-    "netflix": [
-      "netflix.com"
-    ],
-    "disney": [
-      "disneyplus.com",
-      "disney.com"
-    ],
-    "steam": [
-      "steampowered.com",
-      "steamcommunity.com"
-    ],
-    "epicgames": [
-      "epicgames.com"
-    ],
-    "playstation": [
-      "playstation.com"
-    ],
-    "nintendo": [
-      "nintendo.com"
-    ],
-    "github": [
-      "github.com"
-    ],
-    "gitlab": [
-      "gitlab.com"
-    ],
-    "bitbucket": [
-      "bitbucket.org"
-    ],
-    "stackoverflow": [
-      "stackoverflow.com",
-      "stackexchange.com"
+      "appstore.com"
     ],
     "openai": [
       "openai.com",
@@ -160,8 +49,65 @@
       "anthropic.com",
       "claude.ai"
     ],
-    "huggingface": [
-      "huggingface.co"
+    "meta": [
+      "facebook.com",
+      "fb.com",
+      "instagram.com",
+      "threads.net",
+      "whatsapp.com",
+      "messenger.com",
+      "meta.com"
+    ],
+    "x": [
+      "x.com",
+      "twitter.com",
+      "t.co"
+    ],
+    "tiktok": [
+      "tiktok.com",
+      "tiktokcdn.com"
+    ],
+    "snapchat": [
+      "snapchat.com"
+    ],
+    "reddit": [
+      "reddit.com",
+      "redd.it",
+      "redditstatic.com"
+    ],
+    "discord": [
+      "discord.com",
+      "discord.gg",
+      "discordapp.com",
+      "discordapp.net"
+    ],
+    "telegram": [
+      "telegram.org",
+      "t.me"
+    ],
+    "whatsapp": [
+      "whatsapp.com",
+      "wa.me"
+    ],
+    "line": [
+      "line.me",
+      "line-apps.com"
+    ],
+    "wechat": [
+      "wechat.com",
+      "weixin.qq.com"
+    ],
+    "zoom": [
+      "zoom.us",
+      "zoom.com"
+    ],
+    "slack": [
+      "slack.com",
+      "slack-edge.com"
+    ],
+    "notion": [
+      "notion.so",
+      "notion.com"
     ],
     "figma": [
       "figma.com"
@@ -173,114 +119,80 @@
       "adobe.com",
       "behance.net"
     ],
-    "notion": [
-      "notion.so",
-      "notion.site"
-    ],
-    "atlassian": [
-      "atlassian.com",
-      "jira.com",
-      "trello.com"
-    ],
-    "slack": [
-      "slack.com"
-    ],
-    "zoom": [
-      "zoom.us"
-    ],
     "dropbox": [
-      "dropbox.com"
+      "dropbox.com",
+      "dropboxusercontent.com"
     ],
     "box": [
       "box.com"
     ],
-    "onedrive": [
-      "onedrive.com"
+    "atlassian": [
+      "atlassian.com",
+      "jira.com",
+      "confluence.com",
+      "trello.com"
     ],
-    "icloud_drive": [
-      "icloud.com"
+    "salesforce": [
+      "salesforce.com",
+      "force.com"
     ],
-    "cloudflare": [
-      "cloudflare.com"
+    "oracle": [
+      "oracle.com"
+    ],
+    "ibm": [
+      "ibm.com"
     ],
     "cisco": [
       "cisco.com",
       "webex.com"
     ],
-    "ibm": [
-      "ibm.com"
+    "cloudflare": [
+      "cloudflare.com"
     ],
-    "oracle": [
-      "oracle.com"
+    "amazon": [
+      "amazon.com",
+      "amazon.com.my",
+      "amazonaws.com",
+      "aws.amazon.com"
     ],
-    "salesforce": [
-      "salesforce.com"
+    "netflix": [
+      "netflix.com"
     ],
-    "sap": [
-      "sap.com"
+    "spotify": [
+      "spotify.com",
+      "scdn.co"
     ],
-    "docker": [
-      "docker.com",
-      "dockerhub.com"
+    "steam": [
+      "steampowered.com",
+      "steamcommunity.com",
+      "steamstatic.com"
     ],
-    "digitalocean": [
-      "digitalocean.com"
+    "epicgames": [
+      "epicgames.com",
+      "unrealengine.com"
     ],
-    "heroku": [
-      "heroku.com"
+    "nintendo": [
+      "nintendo.com"
     ],
-    "render": [
-      "render.com",
-      "dashboard.render.com",
-      "docs.render.com"
-    ],
-    "vercel": [
-      "vercel.com"
-    ],
-    "netlify": [
-      "netlify.com"
-    ],
-    "shopify": [
-      "shopify.com"
-    ],
-    "woocommerce": [
-      "woocommerce.com"
-    ],
-    "wordpress": [
-      "wordpress.com",
-      "wordpress.org"
-    ],
-    "wix": [
-      "wix.com"
-    ],
-    "squarespace": [
-      "squarespace.com"
-    ],
-    "npm": [
-      "npmjs.com"
-    ],
-    "pypi": [
-      "pypi.org"
-    ],
-    "mozilla": [
-      "mozilla.org",
-      "firefox.com"
-    ],
-    "opera": [
-      "opera.com"
+    "playstation": [
+      "playstation.com",
+      "sony.com"
     ],
     "samsung": [
       "samsung.com"
+    ],
+    "huawei": [
+      "huawei.com"
     ],
     "xiaomi": [
       "mi.com",
       "xiaomi.com"
     ],
-    "huawei": [
-      "huawei.com"
+    "oppo": [
+      "oppo.com"
     ],
-    "sony": [
-      "sony.com"
+    "vivo": [
+      "vivo.com"
     ],
     "dell": [
       "dell.com"
@@ -297,36 +209,100 @@
     "acer": [
       "acer.com"
     ],
-    "nike": [
-      "nike.com"
+    "intel": [
+      "intel.com"
     ],
-    "adidas": [
-      "adidas.com"
+    "nvidia": [
+      "nvidia.com"
     ],
-    "uniqlo": [
-      "uniqlo.com"
+    "amd": [
+      "amd.com"
     ],
-    "zara": [
-      "zara.com"
+    "paypal": [
+      "paypal.com",
+      "paypal.com.my"
     ],
-    "ikea": [
-      "ikea.com"
+    "stripe": [
+      "stripe.com"
     ],
-    "ebay": [
-      "ebay.com"
+    "visa": [
+      "visa.com"
     ],
-    "etsy": [
-      "etsy.com"
+    "mastercard": [
+      "mastercard.com"
     ],
-    "alibaba": [
-      "alibaba.com",
-      "aliexpress.com",
-      "taobao.com",
-      "tmall.com",
-      "1688.com"
+    "americanexpress": [
+      "americanexpress.com"
     ],
-    "jd": [
-      "jd.com"
+    "wise": [
+      "wise.com"
+    ],
+    "revolut": [
+      "revolut.com"
+    ],
+    "binance": [
+      "binance.com",
+      "binance.info"
+    ],
+    "coinbase": [
+      "coinbase.com"
+    ],
+    "kraken": [
+      "kraken.com"
+    ],
+    "okx": [
+      "okx.com"
+    ],
+    "bybit": [
+      "bybit.com"
+    ],
+    "crypto": [
+      "crypto.com"
+    ],
+    "luno": [
+      "luno.com"
+    ],
+    "maybank": [
+      "maybank2u.com.my",
+      "maybank.com",
+      "maybank.com.my"
+    ],
+    "cimb": [
+      "cimb.com.my",
+      "cimbclicks.com.my"
+    ],
+    "rhb": [
+      "rhbgroup.com",
+      "rhbgroup.com.my"
+    ],
+    "publicbank": [
+      "publicbank.com.my",
+      "pbebank.com"
+    ],
+    "hongleong": [
+      "hlb.com.my",
+      "hongleongconnect.my"
+    ],
+    "ambank": [
+      "ambank.com.my"
+    ],
+    "bankislam": [
+      "bankislam.com"
+    ],
+    "bankrakyat": [
+      "bankrakyat.com.my"
+    ],
+    "bsn": [
+      "bsn.com.my",
+      "mybsn.com.my"
+    ],
+    "touchngo": [
+      "touchngo.com.my",
+      "tngdigital.com.my"
+    ],
+    "grab": [
+      "grab.com",
+      "grab.com.my"
     ],
     "shopee": [
       "shopee.com",
@@ -338,24 +314,9 @@
       "lazada.com.my",
       "lazada.sg"
     ],
-    "temu": [
-      "temu.com"
-    ],
-    "zalora": [
-      "zalora.com.my",
-      "zalora.com"
-    ],
-    "booking": [
-      "booking.com"
-    ],
-    "agoda": [
-      "agoda.com"
-    ],
-    "airbnb": [
-      "airbnb.com"
-    ],
-    "grab": [
-      "grab.com"
+    "foodpanda": [
+      "foodpanda.com",
+      "foodpanda.my"
     ],
     "airasia": [
       "airasia.com"
@@ -363,133 +324,191 @@
     "malaysiaairlines": [
       "malaysiaairlines.com"
     ],
-    "maybank": [
-      "maybank2u.com.my",
-      "maybank.com"
+    "batikair": [
+      "batikair.com"
     ],
-    "cimb": [
-      "cimb.com.my",
-      "cimbclicks.com.my"
+    "booking": [
+      "booking.com"
     ],
-    "rhb": [
-      "rhbgroup.com"
+    "agoda": [
+      "agoda.com"
     ],
-    "publicbank": [
-      "publicbank.com.my",
-      "pbebank.com"
+    "expedia": [
+      "expedia.com"
     ],
-    "hongleong": [
-      "hlb.com.my"
+    "tripadvisor": [
+      "tripadvisor.com"
     ],
-    "ambank": [
-      "ambank.com.my"
-    ],
-    "bankislam": [
-      "bankislam.com"
-    ],
-    "bsn": [
-      "bsn.com.my"
-    ],
-    "uob": [
-      "uob.com.my"
-    ],
-    "hsbc": [
-      "hsbc.com.my"
-    ],
-    "standardchartered": [
-      "sc.com"
-    ],
-    "bankrakyat": [
-      "bankrakyat.com.my"
-    ],
-    "bankmuamalat": [
-      "bankmuamalat.com.my"
-    ],
-    "touchngo": [
-      "touchngo.com.my",
-      "tngdigital.com.my"
-    ],
-    "tng": [
-      "touchngo.com.my",
-      "tngdigital.com.my"
-    ],
-    "boost": [
-      "boost.com.my"
-    ],
-    "bigpay": [
-      "bigpayme.com"
-    ],
-    "fpx": [
-      "paynet.my"
+    "uber": [
+      "uber.com"
     ],
     "ukm": [
       "ukm.my",
-      "ukmfolio.ukm.my",
-      "fism.ukm.my",
+      "ukm.edu.my",
       "ftsm.ukm.my",
-      "siswa.ukm.edu.my"
+      "fism.ukm.my",
+      "siswa.ukm.edu.my",
+      "ukmfolio.ukm.my"
     ],
-    "um": [
-      "um.edu.my"
+    "mohe": [
+      "mohe.gov.my"
     ],
-    "upm": [
-      "upm.edu.my"
+    "jpa": [
+      "jpa.gov.my"
     ],
-    "usm": [
-      "usm.my"
-    ],
-    "utm": [
-      "utm.my"
-    ],
-    "uitm": [
-      "uitm.edu.my"
-    ],
-    "unimas": [
-      "unimas.my"
-    ],
-    "ums": [
-      "ums.edu.my"
-    ],
-    "uniten": [
-      "uniten.edu.my"
-    ],
-    "malaysia_gov": [
-      "gov.my",
-      "mygov.my",
-      "mdec.my"
+    "kwsp": [
+      "kwsp.gov.my",
+      "epf.gov.my"
     ],
     "lhdn": [
-      "hasil.gov.my",
-      "lhdn.gov.my"
+      "hasil.gov.my"
+    ],
+    "mygov": [
+      "malaysia.gov.my",
+      "mygov.my"
+    ],
+    "govuk": [
+      "gov.uk"
+    ],
+    "usa": [
+      "usa.gov"
+    ],
+    "bbc": [
+      "bbc.com",
+      "bbc.co.uk"
+    ],
+    "cnn": [
+      "cnn.com"
+    ],
+    "reuters": [
+      "reuters.com"
+    ],
+    "wikipedia": [
+      "wikipedia.org",
+      "wikimedia.org"
+    ],
+    "stackoverflow": [
+      "stackoverflow.com",
+      "stackexchange.com"
+    ],
+    "medium": [
+      "medium.com"
+    ],
+    "quora": [
+      "quora.com"
+    ],
+    "pinterest": [
+      "pinterest.com"
+    ],
+    "tumblr": [
+      "tumblr.com"
+    ],
+    "yahoo": [
+      "yahoo.com",
+      "yahoo.co.jp"
+    ],
+    "proton": [
+      "proton.me",
+      "protonmail.com"
+    ],
+    "duckduckgo": [
+      "duckduckgo.com"
+    ],
+    "waze": [
+      "waze.com"
     ],
     "okooo": [
       "okooo.com"
+    ],
+    "render": [
+      "render.com",
+      "dashboard.render.com"
+    ],
+    "vercel": [
+      "vercel.com"
+    ],
+    "netlify": [
+      "netlify.com"
+    ],
+    "digitalocean": [
+      "digitalocean.com"
+    ],
+    "railway": [
+      "railway.app"
+    ],
+    "supabase": [
+      "supabase.com"
+    ],
+    "firebase": [
+      "firebase.google.com"
+    ],
+    "wordpress": [
+      "wordpress.org"
+    ],
+    "shopify": [
+      "shopify.com"
     ]
   },
   "exact_only_official_domains": [
     "render.com",
     "dashboard.render.com",
-    "docs.render.com"
+    "t.co",
+    "wa.me",
+    "t.me",
+    "youtu.be",
+    "discord.gg",
+    "goo.gl",
+    "forms.gle",
+    "bit.ly",
+    "tinyurl.com"
   ],
   "shared_hosting_domains": [
-    "github.io",
-    "gitlab.io",
-    "pages.dev",
-    "vercel.app",
-    "netlify.app",
-    "onrender.com",
-    "web.app",
-    "firebaseapp.com",
-    "workers.dev",
-    "cloudfront.net",
-    "s3.amazonaws.com",
+    "bit.ly",
+    "bl.ink",
     "blogspot.com",
+    "buff.ly",
+    "canva.site",
+    "carrd.co",
+    "cutt.ly",
+    "discord.gg",
+    "discordapp.net",
+    "discords.com",
+    "docs.google.com",
+    "drive.google.com",
+    "firebaseapp.com",
+    "forms.gle",
+    "github.io",
+    "glitch.me",
+    "goo.su",
+    "is.gd",
+    "lnkd.in",
+    "medium.com",
+    "myshopify.com",
+    "netlify.app",
+    "ngrok-free.app",
+    "notion.site",
+    "onrender.com",
+    "ow.ly",
+    "pages.dev",
+    "rb.gy",
+    "rebrand.ly",
+    "replit.app",
+    "s.id",
+    "sharepoint.com",
+    "short.io",
+    "shorturl.at",
+    "site123.me",
+    "sites.google.com",
+    "t.co",
+    "t.me",
+    "tiny.cc",
+    "tinyurl.com",
+    "vercel.app",
+    "wa.me",
+    "web.app",
+    "weebly.com",
     "wixsite.com",
     "wordpress.com",
-    "weebly.com",
-    "sites.google.com",
-    "notion.site",
-    "canva.site",
-    "myshopify.com"
+    "youtu.be"
   ]
 }
