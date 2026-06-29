@@ -1,25 +1,52 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import importlib
 import joblib
 import json
 import re
+import sys
 import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-import sys
-
-BACKEND_DIR = Path(__file__).resolve().parent
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 from urllib.parse import urlparse
 from difflib import SequenceMatcher
 
-# Import keeps the v8 joblib class resolvable when a v8 model bundle is deployed.
-try:
-    from phishguard_v8_model import PhishGuardURLModelV8  # noqa: F401
-except Exception:
-    PhishGuardURLModelV8 = None
+# Keep the backend directory importable whether the server starts with:
+#   gunicorn app:app               (Render start directory = backend)
+# or a local package import:
+#   from backend.app import app    (project root is on sys.path)
+#
+# Older joblib model bundles refer to these modules by their top-level names.
+BACKEND_DIR = Path(__file__).resolve().parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+MODEL_COMPATIBILITY_IMPORTS = {}
+for _module_name in (
+    "phishguard_ml_features",
+    "phishguard_streaming_model",
+    "phishguard_streaming_model_v7",
+    "phishguard_v8_model",
+    "phishguard_v9_model",
+):
+    try:
+        MODEL_COMPATIBILITY_IMPORTS[_module_name] = importlib.import_module(_module_name)
+    except Exception:
+        MODEL_COMPATIBILITY_IMPORTS[_module_name] = None
+
+# Keep v8 class resolvable when a v8 model bundle is deployed.
+PhishGuardURLModelV8 = getattr(
+    MODEL_COMPATIBILITY_IMPORTS.get("phishguard_v8_model"),
+    "PhishGuardURLModelV8",
+    None,
+)
+
+PhishGuardURLModelV9 = getattr(
+    MODEL_COMPATIBILITY_IMPORTS.get("phishguard_v9_model"),
+    "PhishGuardURLModelV9",
+    None,
+)
 
 app = Flask(__name__)
 CORS(app)
@@ -27,15 +54,16 @@ CORS(app)
 # =========================
 # Model loading
 # =========================
+MODEL_PATH = BACKEND_DIR / "phishing_web_model.pkl"
 try:
-    model = joblib.load(Path(__file__).with_name("phishing_web_model.pkl"))
+    model = joblib.load(MODEL_PATH)
     MODEL_LOAD_ERROR = None
 except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "4.3"
-MODEL_NAME = "PhishGuard URL Risk Classifier"
+API_VERSION = "4.4"
+MODEL_NAME = "PhishGuard Defense-in-Depth URL Risk Classifier"
 SCORE_METHOD = "Auditable 8-Indicator Weighted Scoring + Dynamic Critical-Evidence Aggregation"
 AI_WEIGHT = 0.18
 
@@ -863,8 +891,20 @@ def build_model_feature_audit(features, url=None):
     """
     Supports both:
       1) legacy 22-numeric-feature sklearn models; and
-      2) the v4 URL model bundle trained by training/train_url_model.py.
+      2) URL model bundles trained by the v4/v8 training scripts.
+
+    When the serialized model cannot be loaded, return an explicit audit item
+    instead of pretending that model features were used.
     """
+    if model is None:
+        return [{
+            "name": "model_unavailable",
+            "value": MODEL_LOAD_ERROR or "Model file could not be loaded.",
+            "used_by_model": False,
+            "model_importance": None,
+            "model_importance_percent": None
+        }]
+
     if is_url_model_bundle():
         manifest = model.get("feature_manifest", [])
         if not manifest:
@@ -1616,14 +1656,40 @@ def analyse_url(url):
     indicators.append(official_indicator)
 
     # AI Model
+    # Rules stay active even if an older serialized model cannot be loaded.
+    # This is important for critical look-alike domains such as b1nance.com:
+    # a missing optional model module must not turn a high-risk URL into a
+    # server error or a false "Trusted" result.
     features = extract_url_features(url)
     model_feature_audit = build_model_feature_audit(features, url=url)
-    raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features, url=url)
-    feature_ai_probability = estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain)
-    calibrated_ai_phishing_probability = calibrate_ai_probability(
-        raw_ai_phishing_probability,
-        feature_ai_probability
+    feature_ai_probability = estimate_feature_ai_probability(
+        url, domain, scheme, path, query, official_domain
     )
+
+    ai_model_available = model is not None
+    ai_model_error = None
+
+    if ai_model_available:
+        try:
+            raw_ai_phishing_probability, ai_confidence = get_phishing_probability(
+                features, url=url
+            )
+            calibrated_ai_phishing_probability = calibrate_ai_probability(
+                raw_ai_phishing_probability,
+                feature_ai_probability
+            )
+        except RuntimeError as exc:
+            ai_model_available = False
+            ai_model_error = str(exc)
+            raw_ai_phishing_probability = feature_ai_probability
+            ai_confidence = 0.0
+            calibrated_ai_phishing_probability = feature_ai_probability
+    else:
+        ai_model_error = MODEL_LOAD_ERROR or "Model file could not be loaded."
+        raw_ai_phishing_probability = feature_ai_probability
+        ai_confidence = 0.0
+        calibrated_ai_phishing_probability = feature_ai_probability
+
     raw_ai_score = int(round(raw_ai_phishing_probability * 100))
     feature_ai_score = int(round(feature_ai_probability * 100))
     calibrated_ai_score = int(round(calibrated_ai_phishing_probability * 100))
@@ -1641,11 +1707,19 @@ def analyse_url(url):
     else:
         ai_score = calibrated_ai_score
         effective_ai_probability = calibrated_ai_phishing_probability
-        ai_explanation = (
-            f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
-            f"Calibrated AI-assisted probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
-            f"Effective AI risk used for weighting: {ai_score}/100."
-        )
+        if ai_model_available:
+            ai_explanation = (
+                f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
+                f"Calibrated AI-assisted probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
+                f"Effective AI risk used for weighting: {ai_score}/100."
+            )
+        else:
+            ai_explanation = (
+                "The serialized AI model is currently unavailable. "
+                "This AI-assisted score is a rule-based lexical fallback; "
+                "critical domain, typo-squatting, and URL-structure rules remain active. "
+                f"Fallback risk used for weighting: {ai_score}/100."
+            )
 
     indicators.append(indicator(
         "aiModelProbability",
@@ -1672,6 +1746,9 @@ def analyse_url(url):
             "weighted_contribution_points": round(ai_score * AI_WEIGHT, 2),
             "confidence": round(ai_confidence, 4),
             "confidence_percent": round(ai_confidence * 100, 2),
+            "model_available": ai_model_available,
+            "model_fallback_mode": not ai_model_available,
+            "model_error": ai_model_error,
             "model_feature_count": len(model_feature_audit),
             "model_features_used_count": sum(
                 1 for item in model_feature_audit if item["used_by_model"]
@@ -1908,6 +1985,9 @@ def analyse_url(url):
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
         "model_load_error": MODEL_LOAD_ERROR,
+        "ai_model_available": ai_model_available,
+        "ai_model_fallback_mode": not ai_model_available,
+        "ai_model_error": ai_model_error,
         "ai_phishing_probability": round(effective_ai_probability, 4),
         "ai_phishing_probability_percent": round(effective_ai_probability * 100, 2),
         "effective_ai_probability": round(effective_ai_probability, 4),
@@ -1990,6 +2070,7 @@ def home():
         "api_version": API_VERSION,
         "model_loaded": model is not None,
         "model_load_error": MODEL_LOAD_ERROR,
+        "model_path": MODEL_PATH.name,
         "trusted_domain_config_loaded": TRUSTED_DOMAIN_CONFIG["loaded_from_file"],
         "trusted_domain_config_error": TRUSTED_DOMAIN_CONFIG["load_error"]
     })
@@ -2028,7 +2109,8 @@ def scoring_config():
         "limitations": [
             "HTTPS Usage checks only the submitted URL scheme.",
             "The API does not connect to the destination or validate its TLS certificate.",
-            "No WHOIS, DNS age, live blacklist, or external reputation lookup is performed."
+            "No WHOIS, DNS age, live blacklist, or external reputation lookup is performed.",
+            "Trusted-domain matching verifies ownership patterns only; it cannot confirm that a specific hosted page or account is safe."
         ]
     })
 
