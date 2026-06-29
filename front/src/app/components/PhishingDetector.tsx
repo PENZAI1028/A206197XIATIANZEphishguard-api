@@ -33,6 +33,7 @@ interface Indicator {
   explanation?: string;
   value?: unknown;
   used_in_final_score?: boolean;
+  used_as_reputation_override?: boolean;
   weight_percent?: number;
   weighted_contribution_points?: number;
 }
@@ -75,6 +76,8 @@ interface HistoryItem {
   risk_score: number;
   safety_score: number;
   timestamp: string;
+  critical_phishing?: boolean;
+  verified_official?: boolean;
 }
 
 interface PhishingDetectorProps {
@@ -86,18 +89,27 @@ interface PhishingDetectorProps {
 
 // ─── Tier config ───────────────────────────────────────────────────────────
 
-type Tier = 'trusted' | 'low-risk' | 'suspicious' | 'high-risk' | 'critical';
+type Tier = 'verified-official' | 'low-risk' | 'suspicious' | 'high-risk';
 
-function getTier(riskScore: number, criticalPhishing: boolean): Tier {
-  if (criticalPhishing || riskScore >= 80) return 'critical';
-  if (riskScore >= 60) return 'high-risk';
-  if (riskScore >= 40) return 'suspicious';
-  if (riskScore >= 20) return 'low-risk';
-  return 'trusted';
+function isVerifiedOfficialDomain(result: AIResult): boolean {
+  const indicator = result.indicators?.find(item => item.name === 'officialDomain');
+  if (!indicator || indicator.status !== 'safe' || typeof indicator.value !== 'object' || !indicator.value) {
+    return false;
+  }
+
+  const value = indicator.value as Record<string, unknown>;
+  return typeof value.matched_domain === 'string' && value.matched_domain.length > 0;
+}
+
+function getTier(riskScore: number, verifiedOfficial: boolean): Tier {
+  if (riskScore >= 80) return 'high-risk';
+  if (riskScore >= 45) return 'suspicious';
+  if (verifiedOfficial && riskScore <= 19) return 'verified-official';
+  return 'low-risk';
 }
 
 const TIER = {
-  trusted: {
+  'verified-official': {
     card: 'border-green-500 bg-green-50',
     badgeCls: 'bg-green-600 text-white',
     title: 'text-green-800',
@@ -105,8 +117,8 @@ const TIER = {
     leftBorder: 'border-l-green-500',
     Icon: CheckCircle,
     iconCls: 'text-green-600',
-    heading: 'Trusted — Appears Secure',
-    body: 'This URL shows strong safety indicators and no obvious phishing characteristics.',
+    heading: 'Verified Official Domain',
+    body: 'This URL matches the verified official-domain registry.',
   },
   'low-risk': {
     card: 'border-blue-500 bg-blue-50',
@@ -116,8 +128,8 @@ const TIER = {
     leftBorder: 'border-l-blue-500',
     Icon: CheckCircle,
     iconCls: 'text-blue-600',
-    heading: 'Low Risk — Relatively Safe',
-    body: 'This URL appears relatively safe, but users should still verify the domain.',
+    heading: 'Low Risk Score',
+    body: 'The active scoring engine produced a low risk score for this URL.',
   },
   suspicious: {
     card: 'border-yellow-500 bg-yellow-50',
@@ -127,8 +139,8 @@ const TIER = {
     leftBorder: 'border-l-yellow-500',
     Icon: AlertTriangle,
     iconCls: 'text-yellow-600',
-    heading: 'Suspicious — Review Carefully',
-    body: 'This URL contains suspicious characteristics and should be reviewed carefully.',
+    heading: 'Suspicious Risk Evidence Detected',
+    body: 'This URL triggered elevated-risk indicators in the active analysis.',
   },
   'high-risk': {
     card: 'border-red-500 bg-red-50',
@@ -138,21 +150,18 @@ const TIER = {
     leftBorder: 'border-l-red-500',
     Icon: XCircle,
     iconCls: 'text-red-600',
-    heading: 'High Risk — Likely Phishing',
-    body: 'This URL contains multiple phishing indicators. Avoid entering any sensitive information.',
-  },
-  critical: {
-    card: 'border-red-800 bg-red-100',
-    badgeCls: 'bg-red-900 text-white',
-    title: 'text-red-900',
-    text: 'text-red-800',
-    leftBorder: 'border-l-red-800',
-    Icon: XCircle,
-    iconCls: 'text-red-900',
-    heading: 'Critical — Do Not Visit',
-    body: 'This URL strongly resembles a phishing or impersonation attack. Do not visit or submit any information.',
+    heading: 'High-Risk URL Evidence Detected',
+    body: 'This URL triggered high-risk URL indicators in the active analysis.',
   },
 } satisfies Record<Tier, object>;
+
+function historyLabel(item: HistoryItem): string {
+  const tier = getTier(
+    item.risk_score,
+    Boolean(item.verified_official),
+  );
+  return TIER[tier].heading;
+}
 
 // ─── Indicator name mapping ─────────────────────────────────────────────────
 
@@ -165,6 +174,7 @@ const FRIENDLY_NAMES: Record<string, string> = {
   suspiciousKeywords: 'Suspicious Keywords',
   httpsUsage: 'HTTPS Usage',
   urlLengthComplexity: 'URL Length & Complexity',
+  reputationEvidence: 'Offline Malicious Reputation Evidence',
 };
 
 const CHART_LABELS: Record<string, string> = {
@@ -176,6 +186,7 @@ const CHART_LABELS: Record<string, string> = {
   suspiciousKeywords: 'Keywords',
   httpsUsage: 'HTTPS Usage',
   urlLengthComplexity: 'URL Length',
+  reputationEvidence: 'Offline Reputation',
 };
 
 function friendlyName(raw: string) {
@@ -186,53 +197,227 @@ function chartLabel(raw: string) {
   return CHART_LABELS[raw] ?? raw;
 }
 
-// ─── Indicator value renderer (P0 fix: no [object Object]) ─────────────────
+// ─── Evidence renderers ───────────────────────────────────────────────────
 
-function renderIndicatorValue(name: string, value: unknown): React.ReactNode {
-  // AI model probability is rendered in its own dedicated block — skip generic value display
-  if (name === 'aiModelProbability') return null;
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
 
-  if (value === null || value === undefined) return <span className="text-gray-400">N/A</span>;
+function asText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(', ');
+  return String(value).trim();
+}
 
+function asNumber(value: unknown): number | null {
+  const numberValue = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function numberText(value: unknown, suffix = ''): string {
+  const numberValue = asNumber(value);
+  if (numberValue === null) return '';
+  return `${numberValue.toFixed(2)}${suffix}`;
+}
+
+function rootDomain(host: string): string {
+  const normalized = host.trim().toLowerCase().replace(/^www\./, '');
+  const parts = normalized.split('.').filter(Boolean);
+  if (parts.length <= 2) return normalized;
+  const twoLevelSuffixes = new Set([
+    'com.my', 'edu.my', 'gov.my', 'org.my', 'net.my',
+    'co.uk', 'org.uk', 'ac.uk', 'com.au', 'net.au', 'org.au',
+    'co.jp', 'ne.jp', 'co.id', 'or.id', 'com.sg', 'com.br',
+  ]);
+  const lastTwo = parts.slice(-2).join('.');
+  return twoLevelSuffixes.has(lastTwo) && parts.length >= 3
+    ? parts.slice(-3).join('.')
+    : lastTwo;
+}
+
+function normalizedList(value: unknown): string[] {
   if (Array.isArray(value)) {
-    if (value.length === 0) return <span className="text-gray-400">N/A</span>;
-    return (
-      <span className="flex flex-wrap gap-1">
-        {value.map((v, i) => (
-          <Badge key={i} variant="outline" className="text-xs font-mono">{String(v)}</Badge>
-        ))}
-      </span>
-    );
+    return value.map(asText).filter(Boolean);
+  }
+  const text = asText(value);
+  if (!text || text.toLowerCase() === 'none detected') return [];
+  return [text];
+}
+
+function evidenceStatements(indicator: Indicator): string[] {
+  const record = asRecord(indicator.value);
+  const score = indicator.risk_points ?? indicator.score ?? 0;
+  const statements: string[] = [];
+
+  switch (indicator.name) {
+    case 'officialDomain': {
+      const domain = asText(record.domain);
+      const brand = asText(record.brand || record.matched_brand);
+      const registryEntry = asText(
+        record.matched_domain || record.matched_official || record.matched_official_source
+      );
+      const protectedParent = asText(record.protected_parent_domain);
+      const matchedTerm = asText(record.matched_term || record.matched_token);
+      if (brand) statements.push(`Protected brand: ${brand}.`);
+      if (domain) statements.push(`Detected domain: ${domain}.`);
+      if (registryEntry) {
+        statements.push(`Verified official root: ${rootDomain(registryEntry)}.`);
+        if (registryEntry !== rootDomain(registryEntry)) {
+          statements.push(`Verified official registry entry: ${registryEntry}.`);
+        }
+      }
+      if (protectedParent) statements.push(`Protected official parent domain: ${protectedParent}.`);
+      if (matchedTerm) statements.push(`Protected brand token: ${matchedTerm}.`);
+      if (statements.length === 0) {
+        statements.push(`Official-domain registry risk points: ${score}/100.`);
+      }
+      return statements;
+    }
+
+    case 'aiModelProbability': {
+      const calibrated = numberText(
+        record.calibrated_phishing_probability_percent ?? record.phishing_probability_percent,
+        '%',
+      );
+      const raw = numberText(record.raw_phishing_probability_percent, '%');
+      const lexical = numberText(record.feature_ai_probability_percent, '%');
+      const adjusted = asText(record.adjusted_ai_risk_score);
+      if (calibrated) statements.push(`Calibrated AI-assisted probability: ${calibrated}.`);
+      if (raw) statements.push(`Raw model probability: ${raw}.`);
+      if (lexical) statements.push(`URL lexical-evidence probability: ${lexical}.`);
+      if (adjusted) statements.push(`Adjusted AI risk score: ${adjusted}/100.`);
+      if (statements.length === 0) statements.push(`AI-assisted risk points: ${score}/100.`);
+      return statements;
+    }
+
+    case 'brandVerification': {
+      const brand = asText(record.brand || record.matched_brand);
+      const domain = asText(record.domain || record.root_domain);
+      const term = asText(record.matched_term || record.matched_token);
+      if (brand) statements.push(`Protected brand evidence: ${brand}.`);
+      if (domain) statements.push(`Detected domain: ${domain}.`);
+      if (term) statements.push(`Protected brand token: ${term}.`);
+      statements.push(`Brand-impersonation risk points: ${score}/100.`);
+      return statements;
+    }
+
+    case 'homographAttack': {
+      const brand = asText(record.brand || record.matched_brand);
+      const domain = asText(record.domain || record.root_domain);
+      const official = asText(record.matched_official || record.matched_official_source);
+      const token = asText(record.matched_term || record.matched_token);
+      if (brand) statements.push(`Protected brand evidence: ${brand}.`);
+      if (domain) statements.push(`Detected domain: ${domain}.`);
+      if (official) statements.push(`Verified official root: ${rootDomain(official)}.`);
+      if (token) statements.push(`Similarity token: ${token}.`);
+      statements.push(`Homograph and typosquatting risk points: ${score}/100.`);
+      return statements;
+    }
+
+    case 'urlStructure': {
+      const reasons = normalizedList(indicator.value);
+      statements.push(`URL structure risk points: ${score}/100.`);
+      reasons.forEach(reason => statements.push(`Structure evidence: ${reason}.`));
+      return statements;
+    }
+
+    case 'suspiciousKeywords': {
+      const keywords = normalizedList(indicator.value);
+      statements.push(`Suspicious keyword risk points: ${score}/100.`);
+      if (keywords.length > 0) {
+        statements.push(`Detected keyword tokens: ${keywords.join(', ')}.`);
+      } else {
+        statements.push('Detected keyword token count: 0.');
+      }
+      return statements;
+    }
+
+    case 'httpsUsage': {
+      const scheme = asText(record.submitted_scheme).toUpperCase();
+      if (scheme) statements.push(`Submitted URL scheme: ${scheme}.`);
+      statements.push('TLS certificate validation scope: URL-scheme analysis.');
+      statements.push(`HTTPS usage risk points: ${score}/100.`);
+      return statements;
+    }
+
+    case 'urlLengthComplexity': {
+      const length = asText(record.length);
+      const specialCharacters = asText(record.special_characters);
+      if (length) statements.push(`URL length: ${length} characters.`);
+      if (specialCharacters) statements.push(`Special-character count: ${specialCharacters}.`);
+      statements.push(`URL length and complexity risk points: ${score}/100.`);
+      return statements;
+    }
+
+    case 'reputationEvidence': {
+      const matchType = asText(record.match_type);
+      const sources = normalizedList(record.sources);
+      const contextSources = normalizedList(record.context_sources);
+      const contextMatch = record.context_match === true;
+      const evidenceScore = asText(record.score || score);
+      if (record.match === true) {
+        statements.push(`Offline reputation match type: ${matchType || 'recorded evidence'}.`);
+        if (sources.length > 0) statements.push(`Offline reputation sources: ${sources.join(', ')}.`);
+        statements.push(`Offline reputation evidence score: ${evidenceScore}/100.`);
+      } else if (contextMatch) {
+        statements.push('Offline reputation context: root-domain historical record.');
+        if (contextSources.length > 0) statements.push(`Offline reputation context sources: ${contextSources.join(', ')}.`);
+      } else {
+        statements.push('Offline reputation match count: 0.');
+      }
+      return statements;
+    }
+
+    default:
+      return [`Risk points: ${score}/100.`];
+  }
+}
+
+function renderEvidenceDetails(indicator: Indicator): React.ReactNode {
+  const lines = evidenceStatements(indicator);
+  return (
+    <ul className="space-y-1 text-xs text-gray-700">
+      {lines.map((line, index) => <li key={`${indicator.name}-${index}`}>{line}</li>)}
+    </ul>
+  );
+}
+
+function actionGuidance(result: AIResult, tier: Tier, verifiedOfficial: boolean): string[] {
+  const official = result.indicators?.find(item => item.name === 'officialDomain');
+  const officialValue = asRecord(official?.value);
+  const officialRegistry = asText(officialValue.matched_domain || officialValue.matched_official);
+  const guidance = [`Final risk score: ${result.risk_score}/100.`];
+
+  if (verifiedOfficial && officialRegistry) {
+    guidance.push(`Verified official-domain registry entry: ${officialRegistry}.`);
+    guidance.push(`Service access path: ${officialRegistry}.`);
+    return guidance;
   }
 
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== null && v !== undefined);
-    if (entries.length === 0) return <span className="text-gray-400">N/A</span>;
-    return (
-      <div className="space-y-0.5">
-        {entries.map(([k, v]) => {
-          const label = k.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim();
-          return (
-            <div key={k} className="text-xs">
-              <span className="text-gray-500">{label}:</span>{' '}
-              <span className="font-mono font-medium">{String(v)}</span>
-            </div>
-          );
-        })}
-      </div>
-    );
+  if (tier === 'low-risk') {
+    guidance.push('Analysis record: low risk score with the displayed indicator evidence.');
+    guidance.push('Service access path: confirm the provider domain through an official channel.');
+    return guidance;
   }
 
-  if (typeof value === 'boolean') {
-    return <span className="font-mono">{value ? 'Yes' : 'No'}</span>;
+  guidance.push('Service access path: use the verified official domain from the provider\'s official channel.');
+  if (result.critical_phishing) {
+    guidance.push('Critical-rule evidence: recorded in the detailed calculation section.');
   }
+  return guidance;
+}
 
-  const str = String(value);
-  if (str === '' || str === 'null' || str === 'undefined') {
-    return <span className="text-gray-400">N/A</span>;
+function isSingleHttpUrl(value: string): boolean {
+  const protocolCount = (value.match(/https?:\/\//gi) ?? []).length;
+  if (protocolCount !== 1 || /\s/.test(value)) return false;
+  try {
+    const parsed = new URL(value);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && Boolean(parsed.hostname);
+  } catch {
+    return false;
   }
-
-  return <span className="font-mono text-xs break-all">{str}</span>;
 }
 
 // ─── Score colors ──────────────────────────────────────────────────────────
@@ -272,43 +457,61 @@ function pushHistory(item: HistoryItem) {
 
 // ─── Print helper ──────────────────────────────────────────────────────────
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 function printReport(result: AIResult, timestamp: string) {
   const win = window.open('', '_blank');
   if (!win) return;
+
+  const verifiedOfficial = isVerifiedOfficialDomain(result);
+  const tier = getTier(result.risk_score, verifiedOfficial);
+  const guidance = actionGuidance(result, tier, verifiedOfficial);
+  const indicators = (result.indicators ?? []).filter(
+    indicator => (indicator.used_in_final_score === true || indicator.used_as_reputation_override === true)
+      && Boolean(FRIENDLY_NAMES[indicator.name]),
+  );
+  const indicatorRows = indicators.map(indicator => {
+    const evidence = evidenceStatements(indicator).map(escapeHtml).join('<br>');
+    const riskPoints = indicator.risk_points ?? indicator.score ?? 0;
+    const derivedSafety = indicator.safety_score ?? (100 - riskPoints);
+    return `<tr>
+      <td>${escapeHtml(friendlyName(indicator.name))}</td>
+      <td>${riskPoints}/100</td>
+      <td>${derivedSafety}/100</td>
+      <td>${evidence}</td>
+    </tr>`;
+  }).join('');
+
   win.document.write(`
-    <html><head><title>PhishGuard Report</title>
-    <style>body{font-family:sans-serif;padding:2rem;max-width:800px;margin:auto}h1{color:#3730a3}table{width:100%;border-collapse:collapse;margin:1rem 0}td,th{border:1px solid #ddd;padding:8px;text-align:left}pre{background:#f3f4f6;padding:1rem;overflow-x:auto;font-size:12px}</style>
+    <html><head><title>PhishGuard Analysis Report</title>
+    <style>body{font-family:Arial,sans-serif;padding:2rem;max-width:900px;margin:auto;color:#111827}h1,h2{color:#3730a3}table{width:100%;border-collapse:collapse;margin:1rem 0}td,th{border:1px solid #d1d5db;padding:8px;text-align:left;vertical-align:top}th{background:#eef2ff}li{margin:.45rem 0}.note{background:#eef2ff;padding:1rem;border-radius:.5rem}</style>
     </head><body>
     <h1>PhishGuard Analysis Report</h1>
     <table>
-      <tr><th>URL</th><td style="word-break:break-all">${result.url}</td></tr>
-      <tr><th>Scan Time</th><td>${timestamp}</td></tr>
-      <tr><th>Result</th><td>${result.result}</td></tr>
-      <tr><th>Decision</th><td>${result.decision}</td></tr>
+      <tr><th>URL</th><td style="word-break:break-all">${escapeHtml(result.url)}</td></tr>
+      <tr><th>Scan Time</th><td>${escapeHtml(timestamp)}</td></tr>
+      <tr><th>Result Classification</th><td>${escapeHtml(TIER[tier].heading)}</td></tr>
       <tr><th>Risk Score</th><td>${result.risk_score} / 100</td></tr>
-      <tr><th>Safety Score</th><td>${result.safety_score} / 100</td></tr>
-      <tr><th>Critical Phishing</th><td>${result.critical_phishing ? 'Yes' : 'No'}</td></tr>
+      <tr><th>Derived Safety Score</th><td>${result.safety_score} / 100</td></tr>
+      <tr><th>Critical Rule Trigger</th><td>${result.critical_phishing ? 'Recorded' : '0'}</td></tr>
     </table>
-    <h2>Explanations</h2>
-    <ul>${(result.explanations ?? []).map(e => `<li>${e}</li>`).join('')}</ul>
-    <h2>Recommendations</h2>
-    <ul>${(result.recommendations ?? []).map(r => `<li>${r}</li>`).join('')}</ul>
-    <h2>Indicators</h2>
+    <div class="note">Derived Safety Score = 100 - Final Risk Score.</div>
+    <h2>Action Guidance</h2>
+    <ul>${guidance.map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+    <h2>Indicator Evidence</h2>
     <table>
-      <tr><th>Indicator</th><th>Status</th><th>Risk Points</th><th>Safety Score</th><th>Explanation</th></tr>
-      ${(result.indicators ?? []).filter(
-        ind => ind.used_in_final_score === true && FRIENDLY_NAMES[ind.name]
-      ).map(ind => `
-        <tr>
-          <td>${friendlyName(ind.name)}</td>
-          <td>${ind.status ?? '—'}</td>
-          <td>${ind.risk_points ?? '—'}</td>
-          <td>${ind.safety_score ?? '—'}</td>
-          <td>${ind.explanation ?? '—'}</td>
-        </tr>`).join('')}
+      <tr><th>Indicator</th><th>Risk Points</th><th>Derived Safety Score</th><th>Evidence</th></tr>
+      ${indicatorRows}
     </table>
     <h2>Detection Source</h2>
-    <p>PhishGuard AI API — ${PHISHGUARD_API}</p>
+    <p>PhishGuard API: ${escapeHtml(PHISHGUARD_API)}</p>
     </body></html>`);
   win.document.close();
   win.print();
@@ -324,25 +527,26 @@ export function PhishingDetector({
   const [result, setResult] = useState<AIResult | null>(null);
   const [scanTime, setScanTime] = useState('');
   const [apiError, setApiError] = useState('');
-  const [showRaw, setShowRaw] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
 
   const handleClear = () => {
     setUrl('');
     setResult(null);
     setApiError('');
-    setShowRaw(false);
     setScanTime('');
   };
 
   const handleAnalyze = async () => {
     const trimmed = url.trim();
     if (!trimmed) return;
+    if (!isSingleHttpUrl(trimmed)) {
+      setApiError('Enter one complete http:// or https:// URL.');
+      return;
+    }
 
     setLoading(true);
     setResult(null);
     setApiError('');
-    setShowRaw(false);
 
     try {
       const response = await fetch(PHISHGUARD_API, {
@@ -360,13 +564,17 @@ export function PhishingDetector({
       setScanTime(ts);
 
       // Save to history
+      const verifiedOfficial = isVerifiedOfficialDomain(data);
+      const resultTier = getTier(data.risk_score, verifiedOfficial);
       const histItem: HistoryItem = {
         url: data.url ?? trimmed,
-        result: data.result,
+        result: TIER[resultTier].heading,
         decision: data.decision,
         risk_score: data.risk_score,
         safety_score: data.safety_score,
         timestamp: ts,
+        critical_phishing: data.critical_phishing,
+        verified_official: verifiedOfficial,
       };
       pushHistory(histItem);
       setHistory(loadHistory());
@@ -399,14 +607,17 @@ export function PhishingDetector({
         ).catch(() => undefined);
       } catch { /* non-fatal */ }
     } catch {
-      setApiError('Unable to connect to PhishGuard AI API. Please try again later.');
+      setApiError('API request retry required. Submit the URL again.');
     } finally {
       setLoading(false);
     }
   };
 
   // ─── Derived ──────────────────────────────────────────────────────────────
-  const tier = result ? getTier(result.risk_score, result.critical_phishing) : null;
+  const verifiedOfficial = result ? isVerifiedOfficialDomain(result) : false;
+  const tier = result
+    ? getTier(result.risk_score, verifiedOfficial)
+    : null;
   const styles = tier ? TIER[tier] : null;
 
   const participatingIndicators = result?.indicators?.filter(
@@ -416,14 +627,24 @@ export function PhishingDetector({
       && ind.weight_percent > 0
   ) ?? [];
 
-  const radarData = participatingIndicators.map(ind => ({
+  const ruleOverrideIndicators = result?.indicators?.filter(
+    ind => ind.name === 'reputationEvidence'
+      && ind.used_as_reputation_override === true
+  ) ?? [];
+
+  const displayedIndicators = [
+    ...participatingIndicators,
+    ...ruleOverrideIndicators,
+  ];
+
+  const radarData = displayedIndicators.map(ind => ({
     feature: chartLabel(ind.name),
-    score: ind.safety_score ?? 0,
+    score: ind.risk_points ?? ind.score ?? 0,
   }));
 
-  const barData = participatingIndicators.map(ind => ({
+  const barData = displayedIndicators.map(ind => ({
     name: chartLabel(ind.name),
-    'Safety Score': ind.safety_score ?? 0,
+    'Risk Points': ind.risk_points ?? ind.score ?? 0,
   }));
 
   // ─── Render ───────────────────────────────────────────────────────────────
@@ -466,7 +687,7 @@ export function PhishingDetector({
             <h1 className="text-3xl font-bold text-gray-900">PhishGuard AI Detector</h1>
           </div>
           <p className="text-gray-500 text-sm">
-            Powered by a trained machine-learning model — enter any URL for an instant phishing risk assessment
+            URL scoring uses the active PhishGuard model and backend evidence rules.
           </p>
         </div>
 
@@ -475,7 +696,7 @@ export function PhishingDetector({
           <CardHeader>
             <CardTitle>URL Detection</CardTitle>
             <CardDescription>
-              Enter a website URL to analyze with the PhishGuard trained AI model
+              Enter one complete http:// or https:// URL for backend analysis.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -519,7 +740,7 @@ export function PhishingDetector({
                   <p className="font-semibold text-indigo-800">
                     Analyzing URL with trained PhishGuard AI model...
                   </p>
-                  <p className="text-sm text-indigo-500 mt-0.5">This may take a few seconds</p>
+                  <p className="text-sm text-indigo-500 mt-0.5">Analysis request is active.</p>
                 </div>
               </div>
             </CardContent>
@@ -549,10 +770,13 @@ export function PhishingDetector({
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h2 className={`text-xl font-bold ${styles.title}`}>{styles.heading}</h2>
-                      <Badge className={styles.badgeCls}>{result.result}</Badge>
-                      <Badge variant="outline" className="text-gray-600">{result.decision}</Badge>
+                      <Badge className={styles.badgeCls}>
+                        Risk band: {tier === 'verified-official' ? 'Verified Official Domain' :
+                          tier === 'low-risk' ? 'Low Risk' :
+                          tier === 'suspicious' ? 'Suspicious' : 'High Risk'}
+                      </Badge>
                       {result.critical_phishing && (
-                        <Badge className="bg-red-900 text-white">⚠ Critical Phishing</Badge>
+                        <Badge className="bg-red-900 text-white">Critical Rule Triggered</Badge>
                       )}
                     </div>
                     <p className={`text-sm ${styles.text}`}>{styles.body}</p>
@@ -592,21 +816,20 @@ export function PhishingDetector({
 
                 <div>
                   <div className="flex justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-700">Safety Score</span>
+                    <span className="text-sm font-medium text-gray-700">Derived Safety Score</span>
                     <span className={`text-sm font-bold ${safetyScoreColor(result.safety_score)}`}>
                       {result.safety_score} / 100
                     </span>
                   </div>
                   <Progress value={result.safety_score} className="h-3" />
-                  <p className="text-xs text-gray-400 mt-1">Higher = safer website</p>
+                  <p className="text-xs text-gray-400 mt-1">Formula: 100 − Final Risk Score</p>
                 </div>
 
                 {/* P0.3: weighted scoring note */}
                 <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs text-gray-500">
                   <p>
-                    Final risk score is calculated using weighted scoring. Individual indicators may be
-                    high-risk, but the final verdict depends on the combined weighted score and critical
-                    override rules.
+                    Final risk score records the base weighted score and the backend rule evaluations
+                    applied to this URL.
                   </p>
                 </div>
 
@@ -618,7 +841,7 @@ export function PhishingDetector({
                     How this result is calculated
                   </summary>
                   <div className="mt-3 bg-indigo-50 border border-indigo-200 rounded-md p-4 text-xs text-indigo-800 space-y-2">
-                    <p className="font-semibold">Backend weighted calculation</p>
+                    <p className="font-semibold">Backend score construction</p>
                     <ul className="ml-4 space-y-0.5 font-mono">
                       {participatingIndicators.map((ind, index) => (
                         <li key={ind.name}>
@@ -629,11 +852,25 @@ export function PhishingDetector({
                       ))}
                     </ul>
                     <p className="font-mono">
-                      Weighted score before overrides = {result.score_audit?.weighted_score_before_overrides}
+                      Base weighted score before overrides = {result.score_audit?.weighted_score_before_overrides}
                     </p>
                     <p className="font-mono">
                       Final risk score = {result.score_audit?.final_risk_score}
                     </p>
+                    {ruleOverrideIndicators.map(indicator => (
+                      <div
+                        key={indicator.name}
+                        className="mt-2 rounded border border-indigo-200 bg-white/70 p-2"
+                      >
+                        <p className="font-semibold">
+                          {friendlyName(indicator.name)} — Rule Override
+                        </p>
+                        <p className="font-mono">
+                          Weighted contribution = 0%; evidence score = {indicator.risk_points ?? 0}/100
+                        </p>
+                        <div className="mt-1">{renderEvidenceDetails(indicator)}</div>
+                      </div>
+                    ))}
                     {result.score_audit?.critical_evidence_score != null && (
                       <>
                         <p className="mt-2 font-semibold">Dynamic critical-evidence calculation:</p>
@@ -650,17 +887,19 @@ export function PhishingDetector({
                         </p>
                       </>
                     )}
-                    <p className="font-mono">Safety score = 100 - final risk score</p>
-                    <p className="font-semibold mt-2">Overrides applied to this scan:</p>
-                    {result.score_audit?.applied_overrides?.length > 0 ? (
-                      <ul className="ml-4 space-y-0.5 list-disc list-inside">
-                        {result.score_audit.applied_overrides.map(rule => (
-                          <li key={rule}>{rule}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p>No override was applied.</p>
-                    )}
+                    <p className="font-mono">Derived Safety Score = 100 − Final Risk Score</p>
+                    <p className="font-semibold mt-2">Backend rule evaluation</p>
+                    <ul className="ml-4 space-y-0.5 list-disc list-inside">
+                      {result.critical_phishing && <li>Critical-evidence aggregation applied.</li>}
+                      {ruleOverrideIndicators.some(indicator => (indicator.risk_points ?? indicator.score ?? 0) > 0) && (
+                        <li>Offline malicious reputation evidence applied.</li>
+                      )}
+                      {verifiedOfficial && <li>Verified official-domain registry protection applied.</li>}
+                      {!result.critical_phishing
+                        && !verifiedOfficial
+                        && !ruleOverrideIndicators.some(indicator => (indicator.risk_points ?? indicator.score ?? 0) > 0)
+                        && <li>Final score equals the evaluated base score.</li>}
+                    </ul>
                   </div>
                 </details>
               </CardContent>
@@ -685,37 +924,34 @@ export function PhishingDetector({
                     <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-5 rounded-lg">
                       <h3 className="font-semibold mb-3 flex items-center gap-2 text-sm">
                         <AlertTriangle className="w-4 h-4 text-indigo-600" />
-                        Detection Results Explanation
+                        Evidence Summary
                       </h3>
-                      {result.explanations?.length > 0 ? (
-                        <div className="space-y-2">
-                          {result.explanations.map((exp, i) => (
-                            <div
-                              key={i}
-                              className={`bg-white p-3 rounded border-l-4 ${styles.leftBorder} text-sm text-gray-700`}
-                            >
-                              {exp}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-500 italic">
-                          No obvious phishing indicators were detected.
-                        </p>
-                      )}
+                      <div className="space-y-3">
+                        {displayedIndicators.map(indicator => (
+                          <div
+                            key={indicator.name}
+                            className={`bg-white p-3 rounded border-l-4 ${styles.leftBorder} text-sm text-gray-700`}
+                          >
+                            <p className="mb-1 font-medium text-gray-900">{friendlyName(indicator.name)}</p>
+                            {renderEvidenceDetails(indicator)}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </TabsContent>
 
                   {/* TAB 2 — Features */}
                   <TabsContent value="features" className="mt-5">
-                    {participatingIndicators.length > 0 ? (
+                    {displayedIndicators.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
-                        {participatingIndicators.map((ind, i) => {
+                        {displayedIndicators.map((ind, i) => {
                           const status = (ind.status ?? '').toLowerCase();
                           const isDanger = status === 'danger';
                           const isWarning = status === 'warning';
                           const isSafe = status === 'safe';
                           const isAI = ind.name === 'aiModelProbability';
+                          const isRuleOverride = ind.name === 'reputationEvidence'
+                            && ind.used_as_reputation_override === true;
 
                           const borderCls = isDanger
                             ? 'border-red-400' : isWarning
@@ -759,6 +995,14 @@ export function PhishingDetector({
                                     {ind.status}
                                   </Badge>
                                 )}
+                                {isRuleOverride && (
+                                  <Badge
+                                    variant="outline"
+                                    className="ml-2 mb-3 border-purple-300 text-xs text-purple-700"
+                                  >
+                                    Rule Override · 0% Weighted Contribution
+                                  </Badge>
+                                )}
 
                                 {/* AI Model Probability — all fields sourced from indicator.value */}
                                 {isAI && (() => {
@@ -768,7 +1012,7 @@ export function PhishingDetector({
 
                                   const fmt = (field: unknown, suffix = '') => {
                                     if (field === undefined || field === null || field === '') {
-                                      return <span className="text-gray-400">Not returned by API</span>;
+                                      return <span className="text-gray-400">—</span>;
                                     }
                                     return (
                                       <span className="font-mono font-medium">
@@ -810,39 +1054,22 @@ export function PhishingDetector({
 
                                 {/* Risk points */}
                                 {ind.risk_points !== undefined && (
-                                  <p className="text-xs text-gray-500 mb-1">
-                                    Risk Points:{' '}
-                                    <span className="font-medium text-gray-700">{ind.risk_points} / 100</span>
-                                  </p>
-                                )}
-
-                                {/* Safety score bar */}
-                                {ind.safety_score !== undefined && (
                                   <div className="mt-2 mb-3">
                                     <div className="flex justify-between text-xs mb-1">
-                                      <span className="text-gray-500">Safety Score</span>
-                                      <span className="font-medium">{safetyPct}</span>
+                                      <span className="text-gray-500">Risk Points</span>
+                                      <span className="font-medium">{ind.risk_points} / 100</span>
                                     </div>
-                                    <Progress value={safetyPct} className="h-1.5" />
+                                    <Progress value={ind.risk_points} className="h-1.5" />
+                                    <p className="mt-1 text-xs text-gray-500">
+                                      Derived Safety Score: {safetyPct} / 100 (100 − Risk Points)
+                                    </p>
                                   </div>
                                 )}
 
-                                {/* Explanation */}
-                                {ind.explanation && (
-                                  <p className="text-xs text-gray-600 mt-2 leading-relaxed">
-                                    {ind.explanation}
-                                  </p>
-                                )}
-
-                                {/* Value — skip for aiModelProbability (rendered above) */}
-                                {!isAI && ind.value !== undefined && ind.value !== null && (
-                                  <div className="mt-3 pt-2 border-t border-gray-100">
-                                    <p className="text-xs text-gray-400 mb-1">Value</p>
-                                    <div className="text-xs text-gray-700">
-                                      {renderIndicatorValue(ind.name, ind.value)}
-                                    </div>
-                                  </div>
-                                )}
+                                <div className="mt-3 border-t border-gray-100 pt-2">
+                                  <p className="mb-1 text-xs text-gray-400">Evidence Details</p>
+                                  {renderEvidenceDetails(ind)}
+                                </div>
                               </CardContent>
                             </Card>
                           );
@@ -850,7 +1077,7 @@ export function PhishingDetector({
                       </div>
                     ) : (
                       <p className="text-sm text-gray-400 text-center py-8">
-                        No indicator data returned by the API.
+                        Indicator dataset entries: 0.
                       </p>
                     )}
                   </TabsContent>
@@ -861,18 +1088,18 @@ export function PhishingDetector({
                       <>
                         {/* Radar */}
                         <div>
-                          <h3 className="font-medium mb-1">Security Indicator Safety Levels</h3>
-                          <p className="text-xs text-gray-400 mb-4">Higher values mean safer indicators.</p>
+                          <h3 className="font-medium mb-1">Security Indicator Risk Points</h3>
+                          <p className="text-xs text-gray-400 mb-4">Each value equals the risk points returned by the backend.</p>
                           <ResponsiveContainer width="100%" height={380}>
                             <RadarChart data={radarData}>
                               <PolarGrid />
                               <PolarAngleAxis dataKey="feature" tick={{ fontSize: 11 }} />
                               <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
                               <Radar
-                                name="Safety Score"
+                                name="Risk Points"
                                 dataKey="score"
-                                stroke="#4f46e5"
-                                fill="#4f46e5"
+                                stroke="#b91c1c"
+                                fill="#dc2626"
                                 fillOpacity={0.55}
                               />
                               <Tooltip />
@@ -882,8 +1109,8 @@ export function PhishingDetector({
 
                         {/* Bar */}
                         <div>
-                          <h3 className="font-medium mb-1">Indicator Safety Scores</h3>
-                          <p className="text-xs text-gray-400 mb-4">Higher values mean safer indicators.</p>
+                          <h3 className="font-medium mb-1">Indicator Risk Points</h3>
+                          <p className="text-xs text-gray-400 mb-4">Each value equals the risk points returned by the backend.</p>
                           <ResponsiveContainer width="100%" height={300}>
                             <BarChart data={barData}>
                               <CartesianGrid strokeDasharray="3 3" />
@@ -891,14 +1118,14 @@ export function PhishingDetector({
                               <YAxis domain={[0, 100]} />
                               <Tooltip />
                               <Legend />
-                              <Bar dataKey="Safety Score" fill="#4f46e5" />
+                              <Bar dataKey="Risk Points" fill="#dc2626" />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
                       </>
                     ) : (
                       <p className="text-sm text-gray-400 text-center py-8">
-                        No indicator data available for visualization.
+                        Visualization dataset entries: 0.
                       </p>
                     )}
                   </TabsContent>
@@ -906,27 +1133,25 @@ export function PhishingDetector({
               </CardContent>
             </Card>
 
-            {/* ── SECTION 5: Recommendations ─────────────────────────────── */}
-            {result.recommendations?.length > 0 && (
-              <Card className="shadow">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-indigo-500" />
-                    Security Recommendations
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ul className="space-y-2">
-                    {result.recommendations.map((rec, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="text-indigo-500 mt-0.5 shrink-0">•</span>
-                        {rec}
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-              </Card>
-            )}
+            {/* ── SECTION 5: Action guidance ─────────────────────────────── */}
+            <Card className="shadow">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-indigo-500" />
+                  Action Guidance
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {actionGuidance(result, tier, verifiedOfficial).map((item, i) => (
+                    <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                      <span className="text-indigo-500 mt-0.5 shrink-0">•</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
 
             {/* ── SECTION 6: Admin / Debug ────────────────────────────────── */}
             <Card className="shadow border-gray-200">
@@ -960,7 +1185,7 @@ export function PhishingDetector({
                           <th className="text-left py-2 pr-3 font-medium">URL</th>
                           <th className="text-left py-2 pr-3 font-medium">Result</th>
                           <th className="text-left py-2 pr-3 font-medium">Risk</th>
-                          <th className="text-left py-2 font-medium">Decision</th>
+                          <th className="text-left py-2 font-medium">Critical Rule</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -976,36 +1201,19 @@ export function PhishingDetector({
                                 h.risk_score >= 40 ? 'bg-yellow-500 text-white' :
                                 h.risk_score >= 20 ? 'bg-blue-500 text-white' :
                                 'bg-green-600 text-white'
-                              }`}>{h.result}</Badge>
+                              }`}>{historyLabel(h)}</Badge>
                             </td>
                             <td className="py-2 pr-3 font-mono">{h.risk_score}</td>
-                            <td className="py-2 text-gray-600">{h.decision}</td>
+                            <td className="py-2 text-gray-600">{h.critical_phishing ? 'Recorded' : '0'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400">No scan history yet.</p>
+                  <p className="text-xs text-gray-400">Scan history entries: 0.</p>
                 )}
 
-                {/* P1.3: Raw API Response collapsible */}
-                <div className="border-t pt-4">
-                  <button
-                    className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 select-none"
-                    onClick={() => setShowRaw(v => !v)}
-                  >
-                    {showRaw
-                      ? <ChevronUp className="w-3 h-3" />
-                      : <ChevronDown className="w-3 h-3" />}
-                    {showRaw ? 'Hide' : 'Show'} Raw API Response
-                  </button>
-                  {showRaw && (
-                    <pre className="mt-3 bg-gray-900 text-green-400 text-xs p-4 rounded-lg overflow-x-auto max-h-96 leading-relaxed">
-                      {JSON.stringify(result, null, 2)}
-                    </pre>
-                  )}
-                </div>
               </CardContent>
             </Card>
 
@@ -1018,7 +1226,7 @@ export function PhishingDetector({
             <Card className="shadow mb-6">
               <CardHeader>
                 <CardTitle>Test Examples</CardTitle>
-                <CardDescription>Click a URL to load it into the analyzer</CardDescription>
+                <CardDescription>Select a URL to load it into the analyzer</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-2 sm:grid-cols-2">
@@ -1027,28 +1235,28 @@ export function PhishingDetector({
                     onClick={() => setUrl('https://www.google.com')}
                     className="justify-start text-sm"
                   >
-                    ✅ Safe — https://www.google.com
+                    ✅ Verified official registry — https://www.google.com
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setUrl('https://www.goog1e.com')}
                     className="justify-start text-sm"
                   >
-                    🚫 Homograph — goog1e.com
+                    ⚠ Brand-similarity evidence — goog1e.com
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setUrl('http://paypal-login-security.com')}
                     className="justify-start text-sm"
                   >
-                    🚫 Phishing — paypal-login-security.com
+                    ⚠ Brand and credential evidence — paypal-login-security.com
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setUrl('http://192.168.1.10/login')}
                     className="justify-start text-sm"
                   >
-                    🚫 IP URL — http://192.168.1.10/login
+                    ⚠ IP-host structure evidence — http://192.168.1.10/login
                   </Button>
                 </div>
               </CardContent>
@@ -1072,7 +1280,7 @@ export function PhishingDetector({
                           <th className="text-left py-2 pr-3 font-medium">URL</th>
                           <th className="text-left py-2 pr-3 font-medium">Result</th>
                           <th className="text-left py-2 pr-3 font-medium">Risk</th>
-                          <th className="text-left py-2 font-medium">Decision</th>
+                          <th className="text-left py-2 font-medium">Critical Rule</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1092,10 +1300,10 @@ export function PhishingDetector({
                                 h.risk_score >= 40 ? 'bg-yellow-500 text-white' :
                                 h.risk_score >= 20 ? 'bg-blue-500 text-white' :
                                 'bg-green-600 text-white'
-                              }`}>{h.result}</Badge>
+                              }`}>{historyLabel(h)}</Badge>
                             </td>
                             <td className="py-2 pr-3 font-mono">{h.risk_score}</td>
-                            <td className="py-2 text-gray-600">{h.decision}</td>
+                            <td className="py-2 text-gray-600">{h.critical_phishing ? 'Recorded' : '0'}</td>
                           </tr>
                         ))}
                       </tbody>
