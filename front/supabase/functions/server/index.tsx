@@ -126,6 +126,82 @@ function validDetections(values: any[]) {
   );
 }
 
+type RiskBandKey = "trusted" | "lowRisk" | "suspicious" | "highRisk";
+
+type RiskBandCounts = Record<RiskBandKey, number>;
+
+function riskBandForScore(riskScore: number): RiskBandKey {
+  if (riskScore < 20) return "trusted";
+  if (riskScore < 45) return "lowRisk";
+  if (riskScore < 80) return "suspicious";
+  return "highRisk";
+}
+
+function hasCriticalRule(detection: any) {
+  return detection?.critical_phishing === true;
+}
+
+function riskBandCounts(detections: any[]): RiskBandCounts {
+  const counts: RiskBandCounts = {
+    trusted: 0,
+    lowRisk: 0,
+    suspicious: 0,
+    highRisk: 0,
+  };
+
+  for (const detection of detections) {
+    counts[riskBandForScore(detection.riskScore)] += 1;
+  }
+  return counts;
+}
+
+function highRiskSubmittedHosts(detections: any[]) {
+  const byHost: Record<string, {
+    host: string;
+    count: number;
+    mostRecent: any;
+    criticalRuleApplications: number;
+  }> = {};
+
+  for (const detection of detections) {
+    if (detection.riskScore < 80) continue;
+
+    try {
+      const host = new URL(detection.url).hostname.toLowerCase();
+      if (!host) continue;
+
+      const current = byHost[host] || {
+        host,
+        count: 0,
+        mostRecent: detection,
+        criticalRuleApplications: 0,
+      };
+      current.count += 1;
+      if (hasCriticalRule(detection)) current.criticalRuleApplications += 1;
+      if (new Date(detection.timestamp).getTime() > new Date(current.mostRecent.timestamp).getTime()) {
+        current.mostRecent = detection;
+      }
+      byHost[host] = current;
+    } catch {
+      // The dashboard excludes malformed historic URLs from host aggregation.
+    }
+  }
+
+  return Object.values(byHost)
+    .sort((left, right) => right.count - left.count ||
+      new Date(right.mostRecent.timestamp).getTime() - new Date(left.mostRecent.timestamp).getTime())
+    .slice(0, 10)
+    .map((entry) => ({
+      host: entry.host,
+      detectionCount: entry.count,
+      latestSubmittedUrl: entry.mostRecent.url,
+      latestRiskScore: entry.mostRecent.riskScore,
+      latestCriticalRuleApplied: hasCriticalRule(entry.mostRecent),
+      criticalRuleApplications: entry.criticalRuleApplications,
+      latestTimestamp: entry.mostRecent.timestamp,
+    }));
+}
+
 function basicStatistics(values: any[]) {
   const detections = validDetections(values);
   const totalScans = detections.length;
@@ -160,34 +236,31 @@ function globalStatistics(values: any[]) {
     };
   }
 
-  const domainCounts: Record<string, number> = {};
   for (const detection of detections) {
     const month = detection.timestamp.slice(0, 7);
     if (monthlyStats[month]) {
       monthlyStats[month].total += 1;
-      if (detection.riskScore >= 70) monthlyStats[month].highRisk += 1;
-    }
-
-    if (detection.isPhishing) {
-      try {
-        const domain = new URL(detection.url).hostname;
-        domainCounts[domain] = (domainCounts[domain] || 0) + 1;
-      } catch {
-        // Invalid historic URLs are excluded from the domain chart.
-      }
+      if (detection.riskScore >= 80) monthlyStats[month].highRisk += 1;
     }
   }
 
+  const bands = riskBandCounts(detections);
+  const topHosts = highRiskSubmittedHosts(detections);
+
   return {
     ...base,
+    riskBands: bands,
+    criticalRuleApplications: detections.filter(hasCriticalRule).length,
     uniqueUsers: new Set(detections.map((item) => item.userId)).size,
     anonymousScans:
       detections.filter((item) => item.userId === "anonymous").length,
     monthlyStats,
-    topAbusedDomains: Object.entries(domainCounts)
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 10)
-      .map(([domain, count]) => ({ domain, count })),
+    // Kept for existing clients. New admin UI uses the evidence-preserving host records below.
+    topAbusedDomains: topHosts.map((entry) => ({
+      domain: entry.host,
+      count: entry.detectionCount,
+    })),
+    topHighRiskSubmittedHosts: topHosts,
   };
 }
 
@@ -320,14 +393,25 @@ app.get("/make-server-358bdfd0/admin/detections", async (c) => {
         (item) => new Date(item.timestamp) <= end,
       );
     }
-    if (riskLevel === "safe") {
-      detections = detections.filter((item) => item.riskScore < 30);
+    if (riskLevel === "trusted") {
+      detections = detections.filter((item) => item.riskScore < 20);
+    } else if (riskLevel === "low-risk") {
+      detections = detections.filter(
+        (item) => item.riskScore >= 20 && item.riskScore < 45,
+      );
     } else if (riskLevel === "suspicious") {
       detections = detections.filter(
-        (item) => item.riskScore >= 30 && item.riskScore < 70,
+        (item) => item.riskScore >= 45 && item.riskScore < 80,
       );
     } else if (riskLevel === "high-risk") {
-      detections = detections.filter((item) => item.riskScore >= 70);
+      detections = detections.filter((item) => item.riskScore >= 80);
+    }
+
+    const criticalRule = c.req.query("criticalRule");
+    if (criticalRule === "applied") {
+      detections = detections.filter(hasCriticalRule);
+    } else if (criticalRule === "not-applied") {
+      detections = detections.filter((item) => !hasCriticalRule(item));
     }
     if (domain) {
       detections = detections.filter(
