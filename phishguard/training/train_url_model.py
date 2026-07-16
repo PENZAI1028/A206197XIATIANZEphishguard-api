@@ -29,8 +29,17 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import accuracy_score, classification_report, f1_score, precision_score, recall_score
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.metrics import (
+    accuracy_score,
+    brier_score_loss,
+    classification_report,
+    f1_score,
+    log_loss,
+    precision_recall_curve,
+    precision_score,
+    recall_score,
+)
 from sklearn.model_selection import GroupShuffleSplit
 from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.preprocessing import FunctionTransformer, MaxAbsScaler
@@ -282,6 +291,73 @@ def positive_probability(pipeline: Pipeline, urls: pd.Series) -> np.ndarray:
     return probabilities[:, index]
 
 
+def probability_logit(values: np.ndarray) -> np.ndarray:
+    clipped = np.clip(np.asarray(values, dtype=float), 1e-6, 1 - 1e-6)
+    return np.log(clipped / (1 - clipped)).reshape(-1, 1)
+
+
+def expected_calibration_error(labels: np.ndarray, probabilities: np.ndarray, bins: int = 10) -> float:
+    labels = np.asarray(labels, dtype=int)
+    probabilities = np.asarray(probabilities, dtype=float)
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    total = len(labels)
+    ece = 0.0
+    for index in range(bins):
+        lower, upper = edges[index], edges[index + 1]
+        selected = (probabilities >= lower) & (
+            probabilities <= upper if index == bins - 1 else probabilities < upper
+        )
+        if not selected.any():
+            continue
+        confidence = probabilities[selected].mean()
+        observed = labels[selected].mean()
+        ece += (selected.sum() / total) * abs(confidence - observed)
+    return float(ece)
+
+
+def select_f1_threshold(labels: np.ndarray, probabilities: np.ndarray) -> float:
+    precision, recall, thresholds = precision_recall_curve(labels, probabilities)
+    scores = (2 * precision[:-1] * recall[:-1]) / np.maximum(precision[:-1] + recall[:-1], 1e-12)
+    return float(thresholds[int(np.argmax(scores))])
+
+
+def fit_platt_calibrator(test: pd.DataFrame, raw_probabilities: np.ndarray, seed: int):
+    """Fit on one domain-group subset and evaluate on a disjoint subset."""
+    split = GroupShuffleSplit(n_splits=1, test_size=0.50, random_state=seed + 1)
+    calibration_index, evaluation_index = next(
+        split.split(test["url"], test["label"], groups=test["group"])
+    )
+    calibrator = LogisticRegression(random_state=seed, solver="lbfgs")
+    calibrator.fit(
+        probability_logit(raw_probabilities[calibration_index]),
+        test.iloc[calibration_index]["label"].to_numpy(),
+    )
+    calibration_labels = test.iloc[calibration_index]["label"].to_numpy()
+    calibration_probabilities = calibrator.predict_proba(
+        probability_logit(raw_probabilities[calibration_index])
+    )[:, 1]
+    decision_threshold = select_f1_threshold(calibration_labels, calibration_probabilities)
+    evaluation_labels = test.iloc[evaluation_index]["label"].to_numpy()
+    before = raw_probabilities[evaluation_index]
+    after = calibrator.predict_proba(probability_logit(before))[:, 1]
+    metrics = {
+        "method": "Platt scaling (logistic regression on raw-probability logits)",
+        "group_split_random_state": seed + 1,
+        "calibration_rows": int(len(calibration_index)),
+        "evaluation_rows": int(len(evaluation_index)),
+        "calibration_distinct_root_domains": int(test.iloc[calibration_index]["group"].nunique()),
+        "evaluation_distinct_root_domains": int(test.iloc[evaluation_index]["group"].nunique()),
+        "brier_before": float(brier_score_loss(evaluation_labels, before)),
+        "brier_after": float(brier_score_loss(evaluation_labels, after)),
+        "ece_10_bins_before": expected_calibration_error(evaluation_labels, before),
+        "ece_10_bins_after": expected_calibration_error(evaluation_labels, after),
+        "log_loss_before": float(log_loss(evaluation_labels, before, labels=[0, 1])),
+        "log_loss_after": float(log_loss(evaluation_labels, after, labels=[0, 1])),
+        "decision_threshold": decision_threshold,
+    }
+    return calibrator, metrics
+
+
 def main():
     args = parse_args()
     if not 0 < args.test_size < 0.5:
@@ -338,6 +414,9 @@ def main():
 
     probabilities = positive_probability(pipeline, test["url"])
     predictions = (probabilities >= 0.50).astype(int)
+    probability_calibrator, calibration_metrics = fit_platt_calibrator(
+        test, probabilities, args.seed
+    )
 
     metrics = {
         "accuracy": float(accuracy_score(test["label"], predictions)),
@@ -366,6 +445,7 @@ def main():
         "holdout_distinct_root_domains": int(test["group"].nunique()),
         "target_metric_floor": args.target,
         "holdout_metrics": metrics,
+        "probability_calibration": calibration_metrics,
         "meets_target": meets_target,
         "model_type": "Tfidf character 3-5 gram + lexical URL features + SGD logistic classifier",
         "holdout_protocol": (
@@ -395,6 +475,8 @@ def main():
             "format": "phishguard_url_pipeline_v4",
             "model_name": "PhishGuard Character-Ngram + Lexical URL Classifier",
             "pipeline": pipeline,
+            "probability_calibrator": probability_calibrator,
+            "probability_calibrator_input": "raw_probability_logit",
             "metadata": report,
             "feature_manifest": [
                 {

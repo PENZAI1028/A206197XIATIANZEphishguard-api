@@ -7,7 +7,10 @@ evaluation code, and the training dataset used by the project.
 ## Repository structure
 
 - `front/`: Vite and React frontend. Production output is written to `front/dist/`.
-- `phishguard/backend/`: Flask API, scoring rules, model files, tests, and training scripts.
+- `phishguard/backend/`: Flask API, scoring rules, deployed `.pkl` model, metadata, and backend tests.
+- `phishguard/training/`: grouped-split training, formal Platt calibration, and exact dependency pins.
+- `phishguard/evaluation/`: model comparison, ablation, HTTP performance, and versioned result files.
+- `phishguard/tests/`: versioned trusted-domain, spoofing, and reputation-policy tests.
 - `phishguard/dataset/`: Model training datasets.
 - `render.yaml`: Render Blueprint for the frontend static site and backend API.
 
@@ -41,3 +44,6 @@ Render builds both services from this monorepo:
 The deployed model artifact, its matching metadata, grouped-domain split
 protocol, exact training dependencies, and verification commands are documented
 in [`phishguard/MODEL_REPRODUCIBILITY.md`](phishguard/MODEL_REPRODUCIBILITY.md).
+
+The URL-data boundary and redaction behaviour are documented in
+[`PRIVACY.md`](PRIVACY.md).

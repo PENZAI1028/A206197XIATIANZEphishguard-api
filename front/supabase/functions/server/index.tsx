@@ -91,6 +91,15 @@ async function analyzeUrl(url: string) {
   return result;
 }
 
+function minimiseSubmittedUrl(value: unknown) {
+  try {
+    const parsed = new URL(String(value));
+    return `${parsed.protocol}//${parsed.host}/`;
+  } catch {
+    return "[invalid-url-redacted]";
+  }
+}
+
 async function setValue(key: string, value: any) {
   const { error } = await serviceClient()
     .from(TABLE)
@@ -312,7 +321,8 @@ app.post("/make-server-358bdfd0/detections", async (c) => {
       `detection:${userId}:${timestamp}:${crypto.randomUUID()}`;
     const record = {
       id,
-      url: verified.url || body.url.trim(),
+      url: minimiseSubmittedUrl(verified.url || body.url.trim()),
+      urlSensitiveComponentsRedacted: true,
       riskScore: verified.risk_score,
       safetyScore: verified.safety_score,
       isPhishing: verified.prediction === 1,
@@ -465,6 +475,8 @@ app.post("/make-server-358bdfd0/admin/export", async (c) => {
         const { userId, userEmail, id, ...rest } = caseData;
         return {
           ...rest,
+          url: minimiseSubmittedUrl(rest.url),
+          urlSensitiveComponentsRedacted: true,
           caseId: String(id).split(":").pop(),
           source:
             userId === "anonymous" ? "Anonymous User" : "Registered User",

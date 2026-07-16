@@ -17,7 +17,7 @@ inspectable.
 Artifact SHA-256:
 
 ```text
-5eca55e09e1736fc4d493a555de0fc5969a80d202c62e04987b58bece9cefc6b
+a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340
 ```
 
 Dataset SHA-256:
@@ -52,9 +52,32 @@ The confusion matrix in `[safe, phishing]` label order is
 `[[15701, 222], [0, 26476]]` (TN, FP, FN, TP).
 
 The separate 100-URL end-to-end API regression set in `backend/test_urls.csv`
-produces 96/100 correct predictions with confusion matrix
-`[[49, 1], [3, 47]]`. This system-level result includes the API's rules and
+produces 98/100 correct predictions through actual loopback HTTP requests, with
+confusion matrix `[[49, 1], [1, 49]]`. This system-level result includes the API's rules and
 score aggregation and must not be confused with the grouped model holdout.
+
+## Formal probability calibration
+
+The artifact includes a Platt calibrator fitted on 22,330 grouped-holdout rows
+and evaluated on a disjoint 20,069-row domain-group subset. Brier score improved
+from 0.005243 to 0.003393, 10-bin ECE improved from 0.011899 to 0.001102, and
+log loss improved from 0.027811 to 0.019698. The reliability data and curve are
+published under `evaluation/results/`. The calibrated probability is reported
+separately; the established hybrid risk policy uses raw model risk, explicit
+deterministic evidence and documented overrides.
+
+## Additional evaluation evidence
+
+- `evaluation/results/http_performance.json` measures 100 warmed sequential
+  loopback HTTP `/predict` requests. P95 is 148.73 ms against the 250 ms NFR.
+- `evaluation/results/ablation_results.json` compares rules only, calibrated AI
+  only, AI plus deterministic rules, and the full system with reputation.
+- `evaluation/results/model_comparison.json` compares Logistic Regression, SGD,
+  Linear SVM, Random Forest, Extra Trees and Complement Naive Bayes on one
+  bounded grouped split and shared feature matrix.
+- `evaluation/results/system_regression_current.json` and `.csv` retain every
+  prediction, timestamp, model mode, probability and score for the current
+  100-URL regression run.
 
 ## Recorded training environment
 

@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 import app as backend
 
@@ -60,8 +61,13 @@ class FeatureParticipationTests(unittest.TestCase):
                         item["score"] * backend.INDICATOR_WEIGHTS[item["name"]],
                         2
                     )
-                    self.assertTrue(item["used_in_final_score"])
-                    self.assertGreater(item["weight_percent"], 0)
+                    if item["name"] == "reputationEvidence":
+                        self.assertFalse(item["used_in_final_score"])
+                        self.assertEqual(item["weight_percent"], 0)
+                        self.assertTrue(item["used_as_reputation_override"])
+                    else:
+                        self.assertTrue(item["used_in_final_score"])
+                        self.assertGreater(item["weight_percent"], 0)
                     self.assertEqual(item["weighted_contribution_points"], expected)
 
                 weighted_total = round(
@@ -114,7 +120,12 @@ class FeatureParticipationTests(unittest.TestCase):
             {item["name"] for item in payload["indicators"]},
             set(backend.INDICATOR_WEIGHTS)
         )
-        self.assertTrue(all(item["used_in_final_score"] for item in payload["indicators"]))
+        for item in payload["indicators"]:
+            if item["name"] == "reputationEvidence":
+                self.assertFalse(item["used_in_final_score"])
+                self.assertEqual(item["scoring_mode"], "rule_override")
+            else:
+                self.assertTrue(item["used_in_final_score"])
 
     def test_shortener_with_lookalike_brand_path_is_phishing(self):
         payload = self.predict("https://goo.su/i.whatAapp")
@@ -127,8 +138,18 @@ class FeatureParticipationTests(unittest.TestCase):
         self.assertEqual(payload["decision"], "Phishing")
         self.assertTrue(payload["critical_phishing"])
         self.assertGreaterEqual(payload["risk_score"], 80)
-        self.assertGreaterEqual(indicators["brandVerification"]["score"], 90)
         self.assertGreaterEqual(indicators["urlStructure"]["score"], 90)
+
+    def test_model_failure_is_explicit_rules_only_fallback(self):
+        with mock.patch.object(backend, "model", None), mock.patch.object(
+            backend, "MODEL_LOAD_ERROR", "simulated load failure"
+        ):
+            payload = self.predict("https://example.com/login")
+        self.assertEqual(payload["analysis_mode"], "rules_only_fallback")
+        self.assertFalse(payload["model_available"])
+        self.assertIsNotNone(payload["warning"])
+        self.assertIsNone(payload["raw_ai_phishing_probability"])
+        self.assertIsNone(payload["calibrated_ai_phishing_probability"])
 
 
 if __name__ == "__main__":

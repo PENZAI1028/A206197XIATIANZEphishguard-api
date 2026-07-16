@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
 import json
+import math
 import re
 import time
 import unicodedata
@@ -1074,19 +1075,14 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
     return float(max(0.02, min(0.95, score / 100)))
 
 
-def calibrate_ai_probability(raw_probability, feature_probability):
-    """Blend model probability with lexical evidence so the display is not a hard 0/100 switch."""
-    estimator_count = len(model.estimators_) if model is not None and hasattr(model, "estimators_") else 100
-    smoothed_model_probability = ((raw_probability * estimator_count) + 1) / (estimator_count + 2)
-
-    if raw_probability <= 0.50 and feature_probability >= 0.70:
-        calibrated = (feature_probability * 0.85) + (smoothed_model_probability * 0.15)
-    elif raw_probability <= 0.02 or raw_probability >= 0.98:
-        calibrated = (feature_probability * 0.70) + (smoothed_model_probability * 0.30)
-    else:
-        calibrated = (feature_probability * 0.40) + (smoothed_model_probability * 0.60)
-
-    return float(max(0.02, min(0.95, calibrated)))
+def calibrate_ai_probability(raw_probability):
+    """Apply the fitted Platt calibrator stored with the production model."""
+    if not is_url_model_bundle() or not hasattr(model.get("probability_calibrator"), "predict_proba"):
+        raise RuntimeError("The production probability calibrator is unavailable.")
+    clipped = float(max(1e-6, min(1 - 1e-6, raw_probability)))
+    logit = math.log(clipped / (1 - clipped))
+    calibrated = model["probability_calibrator"].predict_proba([[logit]])[0, 1]
+    return float(max(0.0, min(1.0, calibrated)))
 
 
 def indicator(name, score, status, explanation, value=None, weight=None):
@@ -1740,37 +1736,46 @@ def analyse_url(url):
     model_prediction_error = None
     try:
         raw_ai_phishing_probability, ai_confidence = get_phishing_probability(features, url=url)
-        calibrated_ai_phishing_probability = calibrate_ai_probability(
-            raw_ai_phishing_probability,
-            feature_ai_probability
-        )
+        calibrated_ai_phishing_probability = calibrate_ai_probability(raw_ai_phishing_probability)
     except RuntimeError as exc:
         model_prediction_error = str(exc)
         raw_ai_phishing_probability = feature_ai_probability
         calibrated_ai_phishing_probability = feature_ai_probability
         ai_confidence = 0.0
 
+    analysis_mode = "rules_only_fallback" if model_prediction_error else "full_model"
+    model_available = not model_prediction_error and model is not None
+    analysis_warning = (
+        "The AI model was unavailable. This result uses deterministic URL checks and a lexical estimate only."
+        if model_prediction_error else None
+    )
+
     raw_ai_score = int(round(raw_ai_phishing_probability * 100))
     feature_ai_score = int(round(feature_ai_probability * 100))
     calibrated_ai_score = int(round(calibrated_ai_phishing_probability * 100))
 
+    # Formal calibration is reported as a probability-quality measure. The
+    # hybrid policy retains the raw model probability as its AI risk input so
+    # post-hoc calibration does not silently redefine the established weights.
+    model_risk_score = raw_ai_score if not model_prediction_error else feature_ai_score
+
     # For verified official domains, the AI score is kept in model_info,
     # but the effective risk is capped to prevent false positives like dashboard.render.com.
     if official_domain:
-        ai_score = min(calibrated_ai_score, 15)
+        ai_score = min(model_risk_score, 15)
         effective_ai_probability = ai_score / 100
         ai_explanation = (
             f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
-            f"Calibrated AI-assisted probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
-            f"Verified official-domain correction sets the effective AI risk to {ai_score}/100."
+            f"Platt-calibrated model probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
+            f"The hybrid policy uses the raw model risk, and verified official-domain correction sets it to {ai_score}/100."
         )
     else:
-        ai_score = calibrated_ai_score
-        effective_ai_probability = calibrated_ai_phishing_probability
+        ai_score = model_risk_score
+        effective_ai_probability = ai_score / 100
         ai_explanation = (
             f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
-            f"Calibrated AI-assisted probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
-            f"Effective AI risk used for weighting: {ai_score}/100."
+            f"Platt-calibrated model probability: {calibrated_ai_phishing_probability * 100:.1f}%. "
+            f"Effective raw-model risk used for weighting: {ai_score}/100."
         )
 
     if model_prediction_error:
@@ -2059,17 +2064,24 @@ def analyse_url(url):
         "api_version": API_VERSION,
         "model_load_error": MODEL_LOAD_ERROR,
         "model_prediction_error": model_prediction_error,
+        "analysis_mode": analysis_mode,
+        "model_available": model_available,
+        "warning": analysis_warning,
+        "calibration_method": (
+            model.get("metadata", {}).get("probability_calibration", {}).get("method")
+            if is_url_model_bundle() else None
+        ),
         "reputation_evidence": reputation_indicator.get("value"),
         "ai_phishing_probability": round(effective_ai_probability, 4),
         "ai_phishing_probability_percent": round(effective_ai_probability * 100, 2),
         "effective_ai_probability": round(effective_ai_probability, 4),
         "effective_ai_probability_percent": round(effective_ai_probability * 100, 2),
-        "raw_ai_phishing_probability": round(raw_ai_phishing_probability, 4),
-        "raw_ai_phishing_probability_percent": round(raw_ai_phishing_probability * 100, 2),
+        "raw_ai_phishing_probability": None if model_prediction_error else round(raw_ai_phishing_probability, 4),
+        "raw_ai_phishing_probability_percent": None if model_prediction_error else round(raw_ai_phishing_probability * 100, 2),
         "feature_ai_probability": round(feature_ai_probability, 4),
         "feature_ai_probability_percent": round(feature_ai_probability * 100, 2),
-        "calibrated_ai_phishing_probability": round(calibrated_ai_phishing_probability, 4),
-        "calibrated_ai_phishing_probability_percent": round(calibrated_ai_phishing_probability * 100, 2),
+        "calibrated_ai_phishing_probability": None if model_prediction_error else round(calibrated_ai_phishing_probability, 4),
+        "calibrated_ai_phishing_probability_percent": None if model_prediction_error else round(calibrated_ai_phishing_probability * 100, 2),
         "effective_ai_risk_percent": ai_score,
         "adjusted_ai_risk_score": ai_score,
         "ai_weight_percent": int(AI_WEIGHT * 100),
@@ -2140,6 +2152,13 @@ def home():
         "status": "running",
         "message": "PhishGuard API Running",
         "api_version": API_VERSION,
+        "analysis_mode": "full_model" if is_url_model_bundle() else "rules_only_fallback",
+        "model_available": is_url_model_bundle(),
+        "warning": None if is_url_model_bundle() else "The AI model is unavailable; predictions use deterministic checks only.",
+        "calibration_method": (
+            model.get("metadata", {}).get("probability_calibration", {}).get("method")
+            if is_url_model_bundle() else None
+        ),
         "model_loaded": model is not None,
         "model_load_error": MODEL_LOAD_ERROR,
         "reputation_store": get_store_metadata(),
@@ -2231,6 +2250,10 @@ def predict():
         "model_name": current_model_name(),
         "score_method": SCORE_METHOD,
         "api_version": API_VERSION,
+        "analysis_mode": model_info["analysis_mode"],
+        "model_available": model_info["model_available"],
+        "warning": model_info["warning"],
+        "calibration_method": model_info["calibration_method"],
         "confidence": model_info["ai_confidence_percent"],
         "ai_phishing_probability": model_info["ai_phishing_probability"],
         "ai_phishing_probability_percent": model_info["ai_phishing_probability_percent"],
