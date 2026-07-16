@@ -36,3 +36,8 @@ Render builds both services from this monorepo:
 - Frontend root directory: `front`
 - Backend root directory: `phishguard/backend`
 
+## Model evidence and reproducibility
+
+The deployed model artifact, its matching metadata, grouped-domain split
+protocol, exact training dependencies, and verification commands are documented
+in [`phishguard/MODEL_REPRODUCIBILITY.md`](phishguard/MODEL_REPRODUCIBILITY.md).
