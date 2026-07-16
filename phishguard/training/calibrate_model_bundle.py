@@ -92,7 +92,7 @@ def main():
     url_column = resolve_column(frame, None, URL_CANDIDATES, "url")
     label_column = resolve_column(frame, None, LABEL_CANDIDATES, "label")
     working = pd.DataFrame({"url": frame[url_column].map(normalise_for_model), "raw_label": frame[label_column]})
-    working["label"] = working["raw_label"].map(lambda value: to_binary_label(value, "1"))
+    working["label"] = working["raw_label"].map(lambda value: to_binary_label(value, "0"))
     working = working.dropna(subset=["url", "label"])
     working = working[working["url"].str.len() >= 8].copy()
     working["label"] = working["label"].astype(int)

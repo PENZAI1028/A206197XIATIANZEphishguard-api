@@ -1,18 +1,31 @@
 {
   "format": "phishguard_url_pipeline_v4",
   "model_name": "PhishGuard Character-Ngram + Lexical URL Classifier",
-  "generated_at_utc": "2026-06-28T06:46:26.708572+00:00",
+  "generated_at_utc": "2026-07-16T09:35:03.445164+00:00",
   "artifact": "phishing_web_model.pkl",
-  "artifact_sha256": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340",
+  "artifact_sha256": "18053e500d8c22e1ddbab2aa07ac26af2d24e3fb0378ba4f5521c8f0bacd1512",
   "source_data": "dataset/PhiUSIIL_Phishing_URL_Dataset.csv",
   "source_data_sha256": "a236549cd369cd80bd478ff8e1779cbf44c58d5c3f79f7a51a1adbed7d06d1c6",
-  "url_column": "URL",
-  "label_column": "label",
-  "phishing_value": "1",
+  "label_contract": {
+    "uci_phiusiil_source": {
+      "0": "phishing",
+      "1": "legitimate"
+    },
+    "project_canonical": {
+      "0": "safe_or_legitimate",
+      "1": "phishing"
+    },
+    "mapping": "source 0 -> canonical 1; source 1 -> canonical 0",
+    "synthetic_lookalikes": "canonical label 1 (phishing), appended only to training"
+  },
+  "source_raw_class_counts": {
+    "0": 100945,
+    "1": 134850
+  },
   "source_rows_after_cleaning": 235370,
-  "source_class_counts": {
-    "1": 134850,
-    "0": 100520
+  "canonical_class_counts_after_cleaning": {
+    "0_safe_or_legitimate": 134850,
+    "1_phishing": 100520
   },
   "split": {
     "method": "GroupShuffleSplit",
@@ -24,7 +37,7 @@
     "train_rows_total": 242971,
     "holdout_rows": 42399,
     "holdout_distinct_root_domains": 32690,
-    "leakage_control": "The domain-group split was performed before synthetic augmentation; synthetic lookalikes were added only to training."
+    "leakage_control": "Group split before augmentation; synthetic canonical-label-1 phishing URLs added only to training."
   },
   "model": {
     "text_features": "TF-IDF character n-grams (3-5)",
@@ -55,56 +68,71 @@
     "classifier": "SGDClassifier(loss=log_loss, alpha=0.000004, class_weight=balanced, early_stopping=true, n_iter_no_change=8, random_state=42)"
   },
   "holdout_metrics": {
-    "accuracy": 0.9947640274534777,
-    "precision": 0.9916847703947861,
-    "recall": 1.0,
-    "f1": 0.995825027268966,
+    "accuracy": 0.9958725441637775,
+    "precision": 1.0,
+    "recall": 0.9890096087420712,
+    "f1": 0.994474440339743,
     "confusion_matrix": [
-      [15701, 222],
-      [0, 26476]
+      [
+        26476,
+        0
+      ],
+      [
+        175,
+        15748
+      ]
     ]
   },
   "probability_calibration": {
     "method": "Platt scaling (logistic regression on raw-probability logits)",
-    "outer_holdout_rows": 42399,
+    "group_split_random_state": 43,
     "calibration_rows": 22330,
     "evaluation_rows": 20069,
     "calibration_distinct_root_domains": 16345,
     "evaluation_distinct_root_domains": 16345,
-    "brier_before": 0.005243224974920196,
-    "brier_after": 0.003393301950906766,
-    "ece_10_bins_before": 0.011899137852074344,
-    "ece_10_bins_after": 0.0011015924232317647,
-    "log_loss_before": 0.02781093475667478,
-    "log_loss_after": 0.01969784757774284,
-    "decision_threshold": 0.6555485414293785,
-    "runtime_policy": "The calibrated probability is reported separately. The established hybrid score uses raw model risk plus deterministic evidence and documented overrides."
+    "brier_before": 0.0038657570751783757,
+    "brier_after": 0.0026347209406618415,
+    "ece_10_bins_before": 0.00778621209138169,
+    "ece_10_bins_after": 0.0009874246941068033,
+    "log_loss_before": 0.02155975953343911,
+    "log_loss_after": 0.015525685856399662,
+    "decision_threshold": 0.5407020475819505
   },
   "api_regression_test": {
     "dataset": "backend/test_urls.csv",
     "rows": 100,
-    "accuracy": 0.98,
-    "precision": 0.98,
-    "recall": 0.98,
-    "f1": 0.98,
+    "accuracy": 0.99,
+    "precision": 0.9803921568627451,
+    "recall": 1.0,
+    "f1": 0.9900990099009901,
     "confusion_matrix": [
-      [49, 1],
-      [1, 49]
+      [
+        49,
+        1
+      ],
+      [
+        0,
+        50
+      ]
     ],
-    "scope": "End-to-end loopback HTTP POST /predict regression; this is separate from the grouped model holdout.",
+    "scope": "End-to-end loopback HTTP POST /predict regression; separate from the grouped model holdout.",
     "result_files": [
       "evaluation/results/system_regression_current.json",
       "evaluation/results/system_regression_current.csv"
     ]
   },
   "http_performance": {
-    "procedure": "100 warmed sequential loopback HTTP POST /predict requests after 10 warm-up requests",
-    "mean_ms": 112.7737869998964,
-    "median_ms": 125.18515000192565,
-    "p95_ms": 148.72927999604144,
-    "maximum_ms": 163.3706000066013,
+    "generated_at_utc": "2026-07-16T09:36:49.318886+00:00",
+    "target": "warmed loopback HTTP POST /predict",
+    "warmup_requests": 10,
+    "measured_requests": 100,
+    "mean_ms": 108.94786200013186,
+    "median_ms": 106.74809999909485,
+    "p95_ms": 135.4187449975143,
+    "min_ms": 60.24420000176178,
+    "max_ms": 154.64069999870844,
     "nfr_threshold_ms": 250,
-    "passes": true
+    "passes_nfr": true
   },
   "training_environment": {
     "python": "3.14.6",
@@ -116,8 +144,6 @@
   },
   "verification": {
     "model_alignment_audit": "evaluation/results/model_alignment.json",
-    "model_alignment_status": "PASS (28/28 checks)",
-    "split_integrity_audit": "evaluation/results/split_integrity.json",
-    "split_integrity_status": "PASS (zero train/holdout, calibration/evaluation and synthetic/holdout overlaps)"
+    "split_integrity_audit": "evaluation/results/split_integrity.json"
   }
 }

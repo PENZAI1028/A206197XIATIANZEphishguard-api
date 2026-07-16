@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-07-16T09:21:21.154624+00:00",
+  "generated_at_utc": "2026-07-16T09:40:50.309502+00:00",
   "audit_status": "PASS",
   "dataset": {
     "path": "PhiUSIIL_Phishing_URL_Dataset.csv",
@@ -8,7 +8,19 @@
     "rows_before_url_deduplication": 235795,
     "rows_after_cleaning_and_url_deduplication": 235370,
     "duplicated_url_rows_before_deduplication": 850,
-    "conflicting_label_normalised_url_count_before_deduplication": 0
+    "conflicting_label_normalised_url_count_before_deduplication": 0,
+    "source_label_semantics": {
+      "0": "phishing",
+      "1": "legitimate"
+    },
+    "canonical_label_semantics": {
+      "0": "safe_or_legitimate",
+      "1": "phishing"
+    },
+    "canonical_class_counts_after_cleaning": {
+      "safe_or_legitimate_0": 134850,
+      "phishing_1": 100520
+    }
   },
   "protocol": {
     "outer_split": "GroupShuffleSplit by registered root-like domain",
@@ -22,6 +34,9 @@
     "source_train_rows": 192971,
     "source_train_groups": 130758,
     "synthetic_train_only_rows": 50000,
+    "synthetic_canonical_labels": [
+      1
+    ],
     "holdout_rows": 42399,
     "holdout_groups": 32690,
     "calibration_rows": 22330,

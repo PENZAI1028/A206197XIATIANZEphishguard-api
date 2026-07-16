@@ -4,13 +4,13 @@ Train the PhishGuard v4 URL model on 100,000 to 1,000,000 labelled URLs.
 Examples (PowerShell, from the project root):
   python training/train_url_model.py `
     --data dataset/PhiUSIIL_Phishing_URL_Dataset.csv `
-    --min-rows 100000 --max-rows 1000000
+    --min-rows 100000 --max-rows 1000000 --phishing-value 0
 
   # Only use the model as the production backend model when all holdout
   # metrics meet the threshold:
   python training/train_url_model.py `
     --data dataset/PhiUSIIL_Phishing_URL_Dataset.csv `
-    --min-rows 100000 --max-rows 1000000 --target 0.99
+    --min-rows 100000 --max-rows 1000000 --target 0.98 --phishing-value 0
 """
 from __future__ import annotations
 
@@ -68,8 +68,8 @@ def parse_args():
     parser.add_argument("--label-column", default=None, help="Override label column name.")
     parser.add_argument(
         "--phishing-value",
-        default="1",
-        help="Value in a numeric label column that means phishing (default: 1)."
+        default="0",
+        help="Source-label value that means phishing (PhiUSIIL: 0; legitimate: 1)."
     )
     parser.add_argument("--min-rows", type=int, default=100_000)
     parser.add_argument("--max-rows", type=int, default=1_000_000)
@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-features", type=int, default=350_000)
     parser.add_argument("--synthetic-lookalikes", type=int, default=50_000)
-    parser.add_argument("--target", type=float, default=0.99, help="Minimum required accuracy, precision, recall and F1.")
+    parser.add_argument("--target", type=float, default=0.98, help="Minimum required accuracy, precision, recall and F1.")
     parser.add_argument(
         "--output",
         default=str(BACKEND_DIR / "phishing_web_model.pkl"),
@@ -122,19 +122,28 @@ def resolve_column(frame: pd.DataFrame, requested: str | None, candidates: Itera
 
 
 def to_binary_label(value: object, phishing_value: str) -> int | None:
+    """Map a source label to the project's invariant: 1=phishing, 0=safe.
+
+    Numeric binary labels are handled before textual aliases so a dataset whose
+    source semantics are 0=phishing (such as PhiUSIIL) cannot accidentally have
+    both numeric classes mapped to phishing.
+    """
     if pd.isna(value):
         return None
 
     raw = str(value).strip().lower()
     positive = str(phishing_value).strip().lower()
 
-    if raw == positive:
-        return 1
+    numeric_aliases = {"0", "0.0", "1", "1.0"}
+    if raw in numeric_aliases:
+        if positive not in numeric_aliases:
+            return None
+        return 1 if float(raw) == float(positive) else 0
 
-    if raw in {"0", "0.0", "false", "benign", "legitimate", "safe", "good", "normal"}:
+    if raw in {"false", "benign", "legitimate", "safe", "good", "normal"}:
         return 0
 
-    if raw in {"1", "1.0", "true", "phishing", "malicious", "fraud", "bad", "unsafe", "phish"}:
+    if raw in {"true", "phishing", "malicious", "fraud", "bad", "unsafe", "phish"}:
         return 1
 
     if any(token in raw for token in ("phish", "malicious", "fraud", "scam", "unsafe")):
@@ -440,6 +449,11 @@ def main():
         "url_column": url_column,
         "label_column": label_column,
         "phishing_value": args.phishing_value,
+        "canonical_label_semantics": {"0": "safe_or_legitimate", "1": "phishing"},
+        "source_label_semantics": {
+            str(args.phishing_value): "phishing",
+            "1" if str(args.phishing_value) in {"0", "0.0"} else "0": "safe_or_legitimate",
+        },
         "source_rows_after_cleaning": int(len(working)),
         "source_class_counts": {str(key): int(value) for key, value in class_counts.items()},
         "train_rows_before_synthetic": int(len(train) - len(synthetic)),

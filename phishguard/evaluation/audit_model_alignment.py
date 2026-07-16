@@ -61,7 +61,7 @@ def reconstruct_holdout() -> pd.DataFrame:
             "raw_label": source[label_column],
         }
     )
-    frame["label"] = frame["raw_label"].map(lambda value: to_binary_label(value, "1"))
+    frame["label"] = frame["raw_label"].map(lambda value: to_binary_label(value, "0"))
     frame = frame.dropna(subset=["url", "label"])
     frame = frame[frame["url"].str.len() >= 8].copy()
     frame["label"] = frame["label"].astype(int)
@@ -94,6 +94,28 @@ def main() -> None:
     check("artifact SHA-256", artifact_hash == metadata["artifact_sha256"], artifact_hash, metadata["artifact_sha256"], results)
     check("bundle format", bundle.get("format") == "phishguard_url_pipeline_v4", bundle.get("format"), "phishguard_url_pipeline_v4", results)
     check("model name", bundle.get("model_name") == metadata["model_name"], bundle.get("model_name"), metadata["model_name"], results)
+    check(
+        "PhiUSIIL source label contract",
+        metadata.get("label_contract", {}).get("uci_phiusiil_source") == {"0": "phishing", "1": "legitimate"},
+        metadata.get("label_contract", {}).get("uci_phiusiil_source"),
+        {"0": "phishing", "1": "legitimate"},
+        results,
+    )
+    check(
+        "project canonical label contract",
+        metadata.get("label_contract", {}).get("project_canonical") == {"0": "safe_or_legitimate", "1": "phishing"},
+        metadata.get("label_contract", {}).get("project_canonical"),
+        {"0": "safe_or_legitimate", "1": "phishing"},
+        results,
+    )
+    check("bundle source phishing value", bundle["metadata"].get("phishing_value") == "0", bundle["metadata"].get("phishing_value"), "0", results)
+    check(
+        "cleaned canonical class counts",
+        metadata.get("canonical_class_counts_after_cleaning") == {"0_safe_or_legitimate": 134850, "1_phishing": 100520},
+        metadata.get("canonical_class_counts_after_cleaning"),
+        {"0_safe_or_legitimate": 134850, "1_phishing": 100520},
+        results,
+    )
     check("TF-IDF analyzer", vectorizer.analyzer == "char", vectorizer.analyzer, "char", results)
     check("TF-IDF n-gram range", tuple(vectorizer.ngram_range) == (3, 5), list(vectorizer.ngram_range), [3, 5], results)
     check("lexical feature count", len(LEXICAL_FEATURE_NAMES) == 21, len(LEXICAL_FEATURE_NAMES), 21, results)
@@ -104,6 +126,27 @@ def main() -> None:
     observed_params = {name: classifier.get_params()[name] for name in expected_params}
     check("classifier parameters", observed_params == expected_params, observed_params, expected_params, results)
     check("formal calibrator present", bundle.get("probability_calibrator").__class__.__name__ == "LogisticRegression", bundle.get("probability_calibrator").__class__.__name__, "LogisticRegression", results)
+    orientation_urls = [
+        "https://www.google.com",
+        "https://www.microsoft.com",
+        "https://paypal-login-security.com/verify",
+        "http://secure-account-update.xyz/login",
+    ]
+    orientation_values = pipeline.predict_proba(orientation_urls)[:, list(pipeline.classes_).index(1)]
+    check(
+        "known legitimate orientation sanity check",
+        bool(np.all(orientation_values[:2] < 0.50)),
+        orientation_values[:2].tolist(),
+        "both canonical phishing probabilities below 0.50",
+        results,
+    )
+    check(
+        "known phishing orientation sanity check",
+        bool(np.all(orientation_values[2:] > 0.50)),
+        orientation_values[2:].tolist(),
+        "both canonical phishing probabilities above 0.50",
+        results,
+    )
 
     requirements = {}
     for raw in (TRAINING / "requirements-training.txt").read_text(encoding="utf-8").splitlines():
