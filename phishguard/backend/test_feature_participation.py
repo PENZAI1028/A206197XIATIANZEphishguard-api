@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-import app as backend
+from phishguard.backend import app as backend
 
 
 class FeatureParticipationTests(unittest.TestCase):
@@ -18,22 +18,10 @@ class FeatureParticipationTests(unittest.TestCase):
         self.assertIsNotNone(backend.model, backend.MODEL_LOAD_ERROR)
 
         payload = self.predict("https://goo.su/i.whatAapp")
-        if backend.is_url_model_bundle():
-            self.assertTrue(hasattr(backend.model["pipeline"], "predict_proba"))
-            self.assertGreater(len(payload["model_features"]), 0)
-        else:
-            self.assertEqual(len(backend.MODEL_FEATURE_NAMES), 22)
-            self.assertEqual(
-                int(backend.model.n_features_in_),
-                len(backend.MODEL_FEATURE_NAMES)
-            )
-            self.assertTrue(
-                all(float(value) > 0 for value in backend.model.feature_importances_)
-            )
-            self.assertEqual(
-                len(payload["model_features"]),
-                len(backend.MODEL_FEATURE_NAMES)
-            )
+        self.assertTrue(backend.is_url_model_bundle())
+        self.assertEqual(backend.model["format"], "phishguard_url_pipeline_v4")
+        self.assertTrue(hasattr(backend.model["pipeline"], "predict_proba"))
+        self.assertGreater(len(payload["model_features"]), 0)
 
         self.assertTrue(all(item["used_by_model"] for item in payload["model_features"]))
 

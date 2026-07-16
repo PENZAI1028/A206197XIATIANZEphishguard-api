@@ -19,6 +19,31 @@ SUSPICIOUS_TOKENS = (
     "credential", "invoice", "refund", "crypto", "airdrop"
 )
 
+# Ordered contract used by lexical_url_matrix and the published model audit.
+LEXICAL_FEATURE_NAMES = (
+    "url_length",
+    "host_length",
+    "path_length",
+    "query_length",
+    "host_dot_count",
+    "host_hyphen_count",
+    "at_count",
+    "question_count",
+    "equals_count",
+    "percent_count",
+    "slash_count",
+    "digit_count",
+    "digit_ratio",
+    "special_character_count",
+    "suspicious_token_count",
+    "https_flag",
+    "ip_host_flag",
+    "punycode_flag",
+    "root_label_digit_flag",
+    "url_length_at_least_80_flag",
+    "url_length_at_least_120_flag",
+)
+
 
 def normalise_for_model(value: object) -> str:
     url = str(value or "").strip().lower()
@@ -50,7 +75,7 @@ def lexical_url_matrix(urls):
         ip_like = bool(re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", host))
         punycode = "xn--" in host
 
-        rows.append([
+        row = [
             len(url),
             len(host),
             len(path),
@@ -72,6 +97,9 @@ def lexical_url_matrix(urls):
             int(any(ch.isdigit() for ch in root_label)),
             int(len(url) >= 80),
             int(len(url) >= 120),
-        ])
+        ]
+        if len(row) != len(LEXICAL_FEATURE_NAMES):
+            raise RuntimeError("Lexical feature implementation does not match its published contract.")
+        rows.append(row)
 
     return sparse.csr_matrix(np.asarray(rows, dtype=np.float32))

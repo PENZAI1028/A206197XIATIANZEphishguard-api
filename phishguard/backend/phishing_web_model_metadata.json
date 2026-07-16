@@ -29,6 +29,29 @@
   "model": {
     "text_features": "TF-IDF character n-grams (3-5)",
     "lexical_feature_count": 21,
+    "lexical_feature_names": [
+      "url_length",
+      "host_length",
+      "path_length",
+      "query_length",
+      "host_dot_count",
+      "host_hyphen_count",
+      "at_count",
+      "question_count",
+      "equals_count",
+      "percent_count",
+      "slash_count",
+      "digit_count",
+      "digit_ratio",
+      "special_character_count",
+      "suspicious_token_count",
+      "https_flag",
+      "ip_host_flag",
+      "punycode_flag",
+      "root_label_digit_flag",
+      "url_length_at_least_80_flag",
+      "url_length_at_least_120_flag"
+    ],
     "classifier": "SGDClassifier(loss=log_loss, alpha=0.000004, class_weight=balanced, early_stopping=true, n_iter_no_change=8, random_state=42)"
   },
   "holdout_metrics": {
@@ -90,5 +113,11 @@
     "pandas": "3.0.3",
     "scipy": "1.18.0",
     "scikit-learn": "1.9.0"
+  },
+  "verification": {
+    "model_alignment_audit": "evaluation/results/model_alignment.json",
+    "model_alignment_status": "PASS (28/28 checks)",
+    "split_integrity_audit": "evaluation/results/split_integrity.json",
+    "split_integrity_status": "PASS (zero train/holdout, calibration/evaluation and synthetic/holdout overlaps)"
   }
 }

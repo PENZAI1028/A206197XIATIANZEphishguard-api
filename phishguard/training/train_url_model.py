@@ -48,7 +48,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_DIR = PROJECT_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from phishguard_ml_features import lexical_url_matrix, normalise_for_model  # noqa: E402
+from phishguard_ml_features import (  # noqa: E402
+    LEXICAL_FEATURE_NAMES,
+    lexical_url_matrix,
+    normalise_for_model,
+)
 
 
 URL_CANDIDATES = ("url", "URL", "Url", "link", "Link", "domain", "Domain")
@@ -489,6 +493,8 @@ def main():
                 {
                     "name": "lexical_url_features",
                     "value": "URL length, host/path/query structure, punctuation, digits, HTTPS, IP and token signals",
+                    "feature_count": len(LEXICAL_FEATURE_NAMES),
+                    "feature_names": list(LEXICAL_FEATURE_NAMES),
                     "used_by_model": True,
                     "model_importance": None,
                     "model_importance_percent": None
