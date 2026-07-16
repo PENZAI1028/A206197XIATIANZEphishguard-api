@@ -1,18 +1,17 @@
 {
-  "generated_at_utc": "2026-07-16T04:59:41.070793+00:00",
+  "generated_at_utc": "2026-07-16T09:36:01.464854+00:00",
   "method": "Platt scaling (logistic regression on raw-probability logits)",
-  "source_model_sha256_before_calibration": "485468b9aed8f599a2d23f02918a22df0f718828f0c518d8311f51c3e4f23967",
+  "source_model_sha256_before_calibration": "18053e500d8c22e1ddbab2aa07ac26af2d24e3fb0378ba4f5521c8f0bacd1512",
   "outer_holdout_rows": 42399,
   "calibration_rows": 22330,
   "evaluation_rows": 20069,
   "calibration_distinct_root_domains": 16345,
   "evaluation_distinct_root_domains": 16345,
-  "brier_before": 0.005243224974920196,
-  "brier_after": 0.003393301950906766,
-  "ece_10_bins_before": 0.011899137852074344,
-  "ece_10_bins_after": 0.0011015924232317647,
-  "log_loss_before": 0.02781093475667478,
-  "log_loss_after": 0.01969784757774284,
-  "decision_threshold": 0.6555485414293785,
-  "artifact_sha256_after_calibration": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340"
+  "brier_before": 0.0038657570751783757,
+  "brier_after": 0.0026347209406618415,
+  "ece_10_bins_before": 0.00778621209138169,
+  "ece_10_bins_after": 0.0009874246941068033,
+  "log_loss_before": 0.02155975953343911,
+  "log_loss_after": 0.015525685856399662,
+  "decision_threshold": 0.5407020475819505
 }

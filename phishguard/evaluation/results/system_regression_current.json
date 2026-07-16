@@ -1,23 +1,23 @@
 {
-  "generated_at_utc": "2026-07-16T05:02:28.155858+00:00",
+  "generated_at_utc": "2026-07-16T09:36:26.648913+00:00",
   "execution": "HTTP POST requests to /predict over a loopback TCP endpoint",
   "dataset": "test_urls.csv",
   "dataset_sha256": "b34b3d9835f6e82109fe05d96635f41d10a9a14afb577b4f23d09a95e5477eae",
   "rows": 100,
   "safe_rows": 50,
   "phishing_rows": 50,
-  "accuracy": 0.98,
-  "precision": 0.98,
-  "recall": 0.98,
-  "f1": 0.98,
+  "accuracy": 0.99,
+  "precision": 0.9803921568627451,
+  "recall": 1.0,
+  "f1": 0.9900990099009901,
   "confusion_matrix_label_order_safe_phishing": [
     [
       49,
       1
     ],
     [
-      1,
-      49
+      0,
+      50
     ]
   ],
   "incorrect_cases": [
@@ -28,26 +28,12 @@
       "predicted": 1,
       "correct": false,
       "decision": "Phishing",
-      "risk_score": 86,
+      "risk_score": 80,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 1.0,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 108.31
-    },
-    {
-      "case": 74,
-      "url": "https://pay-login-security.com",
-      "expected": 1,
-      "predicted": 0,
-      "correct": false,
-      "decision": "Safe",
-      "risk_score": 19,
-      "analysis_mode": "full_model",
-      "model_available": true,
-      "raw_probability": 0.348,
-      "calibrated_probability": 0.0287,
-      "analysis_time_ms": 121.72
+      "raw_probability": 0.0012,
+      "calibrated_probability": 0.0001,
+      "analysis_time_ms": 71.8
     }
   ],
   "records": [
@@ -61,9 +47,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 1.0,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 7.77
+      "raw_probability": 0.0365,
+      "calibrated_probability": 0.0276,
+      "analysis_time_ms": 3.72
     },
     {
       "case": 2,
@@ -75,9 +61,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9995,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 8.77
+      "raw_probability": 0.01,
+      "calibrated_probability": 0.0028,
+      "analysis_time_ms": 2.49
     },
     {
       "case": 3,
@@ -89,9 +75,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9952,
-      "calibrated_probability": 0.9997,
-      "analysis_time_ms": 6.29
+      "raw_probability": 0.0351,
+      "calibrated_probability": 0.0257,
+      "analysis_time_ms": 2.32
     },
     {
       "case": 4,
@@ -103,9 +89,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9981,
-      "calibrated_probability": 0.9999,
-      "analysis_time_ms": 7.6
+      "raw_probability": 0.0116,
+      "calibrated_probability": 0.0036,
+      "analysis_time_ms": 2.19
     },
     {
       "case": 5,
@@ -117,9 +103,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9991,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 8.29
+      "raw_probability": 0.0088,
+      "calibrated_probability": 0.0022,
+      "analysis_time_ms": 2.25
     },
     {
       "case": 6,
@@ -131,9 +117,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.99,
-      "calibrated_probability": 0.9987,
-      "analysis_time_ms": 10.98
+      "raw_probability": 0.0185,
+      "calibrated_probability": 0.0083,
+      "analysis_time_ms": 3.79
     },
     {
       "case": 7,
@@ -145,9 +131,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9999,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 7.2
+      "raw_probability": 0.0125,
+      "calibrated_probability": 0.0041,
+      "analysis_time_ms": 7.81
     },
     {
       "case": 8,
@@ -159,9 +145,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9995,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 6.66
+      "raw_probability": 0.0025,
+      "calibrated_probability": 0.0002,
+      "analysis_time_ms": 8.15
     },
     {
       "case": 9,
@@ -173,9 +159,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9985,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 6.5
+      "raw_probability": 0.0118,
+      "calibrated_probability": 0.0037,
+      "analysis_time_ms": 5.2
     },
     {
       "case": 10,
@@ -187,9 +173,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3355,
-      "calibrated_probability": 0.0258,
-      "analysis_time_ms": 12.39
+      "raw_probability": 0.5316,
+      "calibrated_probability": 0.9173,
+      "analysis_time_ms": 12.89
     },
     {
       "case": 11,
@@ -201,9 +187,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9999,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 6.59
+      "raw_probability": 0.0068,
+      "calibrated_probability": 0.0014,
+      "analysis_time_ms": 5.03
     },
     {
       "case": 12,
@@ -215,9 +201,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9988,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 7.26
+      "raw_probability": 0.0033,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 4.86
     },
     {
       "case": 13,
@@ -229,9 +215,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.7834,
-      "calibrated_probability": 0.548,
-      "analysis_time_ms": 7.32
+      "raw_probability": 0.7109,
+      "calibrated_probability": 0.9773,
+      "analysis_time_ms": 3.9
     },
     {
       "case": 14,
@@ -240,12 +226,12 @@
       "predicted": 0,
       "correct": true,
       "decision": "Relatively Safe",
-      "risk_score": 23,
+      "risk_score": 20,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9948,
-      "calibrated_probability": 0.9996,
-      "analysis_time_ms": 12.66
+      "raw_probability": 0.0068,
+      "calibrated_probability": 0.0014,
+      "analysis_time_ms": 31.66
     },
     {
       "case": 15,
@@ -257,9 +243,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9978,
-      "calibrated_probability": 0.9999,
-      "analysis_time_ms": 11.56
+      "raw_probability": 0.0023,
+      "calibrated_probability": 0.0002,
+      "analysis_time_ms": 11.36
     },
     {
       "case": 16,
@@ -271,9 +257,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9992,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 8.0
+      "raw_probability": 0.0058,
+      "calibrated_probability": 0.0011,
+      "analysis_time_ms": 3.64
     },
     {
       "case": 17,
@@ -285,9 +271,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9989,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 8.14
+      "raw_probability": 0.0021,
+      "calibrated_probability": 0.0002,
+      "analysis_time_ms": 10.39
     },
     {
       "case": 18,
@@ -299,9 +285,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9992,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 9.66
+      "raw_probability": 0.0182,
+      "calibrated_probability": 0.008,
+      "analysis_time_ms": 6.35
     },
     {
       "case": 19,
@@ -313,9 +299,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9987,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 18.01
+      "raw_probability": 0.0015,
+      "calibrated_probability": 0.0001,
+      "analysis_time_ms": 5.44
     },
     {
       "case": 20,
@@ -327,9 +313,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9997,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 35.44
+      "raw_probability": 0.0031,
+      "calibrated_probability": 0.0003,
+      "analysis_time_ms": 7.05
     },
     {
       "case": 21,
@@ -341,9 +327,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9993,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 15.24
+      "raw_probability": 0.0025,
+      "calibrated_probability": 0.0002,
+      "analysis_time_ms": 10.51
     },
     {
       "case": 22,
@@ -355,9 +341,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9991,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 15.81
+      "raw_probability": 0.0037,
+      "calibrated_probability": 0.0005,
+      "analysis_time_ms": 8.85
     },
     {
       "case": 23,
@@ -369,9 +355,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9978,
-      "calibrated_probability": 0.9999,
-      "analysis_time_ms": 36.24
+      "raw_probability": 0.0043,
+      "calibrated_probability": 0.0006,
+      "analysis_time_ms": 15.62
     },
     {
       "case": 24,
@@ -383,9 +369,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9993,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 30.27
+      "raw_probability": 0.0032,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 8.46
     },
     {
       "case": 25,
@@ -397,9 +383,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9991,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 36.99
+      "raw_probability": 0.0052,
+      "calibrated_probability": 0.0009,
+      "analysis_time_ms": 10.45
     },
     {
       "case": 26,
@@ -411,9 +397,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9964,
-      "calibrated_probability": 0.9998,
-      "analysis_time_ms": 45.05
+      "raw_probability": 0.0036,
+      "calibrated_probability": 0.0005,
+      "analysis_time_ms": 12.7
     },
     {
       "case": 27,
@@ -425,9 +411,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9967,
-      "calibrated_probability": 0.9998,
-      "analysis_time_ms": 40.77
+      "raw_probability": 0.0131,
+      "calibrated_probability": 0.0045,
+      "analysis_time_ms": 9.01
     },
     {
       "case": 28,
@@ -439,9 +425,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9989,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 32.16
+      "raw_probability": 0.0034,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 9.87
     },
     {
       "case": 29,
@@ -453,9 +439,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9995,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 31.56
+      "raw_probability": 0.0147,
+      "calibrated_probability": 0.0055,
+      "analysis_time_ms": 8.26
     },
     {
       "case": 30,
@@ -467,9 +453,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9963,
-      "calibrated_probability": 0.9998,
-      "analysis_time_ms": 41.88
+      "raw_probability": 0.3122,
+      "calibrated_probability": 0.6896,
+      "analysis_time_ms": 9.34
     },
     {
       "case": 31,
@@ -481,9 +467,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9992,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 38.62
+      "raw_probability": 0.1722,
+      "calibrated_probability": 0.3607,
+      "analysis_time_ms": 8.91
     },
     {
       "case": 32,
@@ -495,9 +481,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9998,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 29.72
+      "raw_probability": 0.0681,
+      "calibrated_probability": 0.0825,
+      "analysis_time_ms": 8.4
     },
     {
       "case": 33,
@@ -509,9 +495,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9955,
-      "calibrated_probability": 0.9997,
-      "analysis_time_ms": 43.38
+      "raw_probability": 0.0026,
+      "calibrated_probability": 0.0003,
+      "analysis_time_ms": 13.73
     },
     {
       "case": 34,
@@ -523,9 +509,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9976,
-      "calibrated_probability": 0.9999,
-      "analysis_time_ms": 39.11
+      "raw_probability": 0.0373,
+      "calibrated_probability": 0.0287,
+      "analysis_time_ms": 8.84
     },
     {
       "case": 35,
@@ -537,9 +523,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9972,
-      "calibrated_probability": 0.9999,
-      "analysis_time_ms": 42.82
+      "raw_probability": 0.0323,
+      "calibrated_probability": 0.0222,
+      "analysis_time_ms": 7.53
     },
     {
       "case": 36,
@@ -551,9 +537,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9955,
-      "calibrated_probability": 0.9997,
-      "analysis_time_ms": 46.29
+      "raw_probability": 0.0546,
+      "calibrated_probability": 0.0561,
+      "analysis_time_ms": 10.06
     },
     {
       "case": 37,
@@ -565,9 +551,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9998,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 38.76
+      "raw_probability": 0.0281,
+      "calibrated_probability": 0.0173,
+      "analysis_time_ms": 8.59
     },
     {
       "case": 38,
@@ -579,9 +565,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9997,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 36.66
+      "raw_probability": 0.0027,
+      "calibrated_probability": 0.0003,
+      "analysis_time_ms": 8.59
     },
     {
       "case": 39,
@@ -593,9 +579,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9924,
-      "calibrated_probability": 0.9992,
-      "analysis_time_ms": 31.25
+      "raw_probability": 0.0316,
+      "calibrated_probability": 0.0214,
+      "analysis_time_ms": 8.94
     },
     {
       "case": 40,
@@ -607,9 +593,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9998,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 54.79
+      "raw_probability": 0.006,
+      "calibrated_probability": 0.0011,
+      "analysis_time_ms": 12.84
     },
     {
       "case": 41,
@@ -618,12 +604,12 @@
       "predicted": 1,
       "correct": false,
       "decision": "Phishing",
-      "risk_score": 86,
+      "risk_score": 80,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 1.0,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 108.31
+      "raw_probability": 0.0012,
+      "calibrated_probability": 0.0001,
+      "analysis_time_ms": 71.8
     },
     {
       "case": 42,
@@ -635,9 +621,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9994,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 44.16
+      "raw_probability": 0.0034,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 10.42
     },
     {
       "case": 43,
@@ -649,9 +635,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9998,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 35.66
+      "raw_probability": 0.0065,
+      "calibrated_probability": 0.0013,
+      "analysis_time_ms": 9.33
     },
     {
       "case": 44,
@@ -663,9 +649,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9991,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 38.3
+      "raw_probability": 0.0046,
+      "calibrated_probability": 0.0007,
+      "analysis_time_ms": 9.97
     },
     {
       "case": 45,
@@ -677,9 +663,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9989,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 36.54
+      "raw_probability": 0.0079,
+      "calibrated_probability": 0.0018,
+      "analysis_time_ms": 10.99
     },
     {
       "case": 46,
@@ -687,13 +673,13 @@
       "expected": 0,
       "predicted": 0,
       "correct": true,
-      "decision": "Relatively Safe",
-      "risk_score": 20,
+      "decision": "Safe",
+      "risk_score": 2,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9997,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 139.1
+      "raw_probability": 0.0032,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 109.89
     },
     {
       "case": 47,
@@ -705,9 +691,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9937,
-      "calibrated_probability": 0.9995,
-      "analysis_time_ms": 45.0
+      "raw_probability": 0.004,
+      "calibrated_probability": 0.0006,
+      "analysis_time_ms": 13.47
     },
     {
       "case": 48,
@@ -715,13 +701,13 @@
       "expected": 0,
       "predicted": 0,
       "correct": true,
-      "decision": "Relatively Safe",
-      "risk_score": 23,
+      "decision": "Safe",
+      "risk_score": 5,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9977,
-      "calibrated_probability": 0.9999,
-      "analysis_time_ms": 176.74
+      "raw_probability": 0.0034,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 125.31
     },
     {
       "case": 49,
@@ -733,9 +719,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.7718,
-      "calibrated_probability": 0.5157,
-      "analysis_time_ms": 394.63
+      "raw_probability": 0.3719,
+      "calibrated_probability": 0.7798,
+      "analysis_time_ms": 282.91
     },
     {
       "case": 50,
@@ -747,9 +733,9 @@
       "risk_score": 0,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.7444,
-      "calibrated_probability": 0.4434,
-      "analysis_time_ms": 268.32
+      "raw_probability": 0.3196,
+      "calibrated_probability": 0.7023,
+      "analysis_time_ms": 219.92
     },
     {
       "case": 51,
@@ -758,12 +744,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 100,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9999,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 95.08
+      "raw_probability": 0.0988,
+      "calibrated_probability": 0.155,
+      "analysis_time_ms": 60.63
     },
     {
       "case": 52,
@@ -772,12 +758,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 100,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9995,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 89.95
+      "raw_probability": 0.0031,
+      "calibrated_probability": 0.0004,
+      "analysis_time_ms": 49.0
     },
     {
       "case": 53,
@@ -786,12 +772,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 100,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9988,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 70.95
+      "raw_probability": 0.0343,
+      "calibrated_probability": 0.0247,
+      "analysis_time_ms": 59.85
     },
     {
       "case": 54,
@@ -800,12 +786,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 100,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9964,
-      "calibrated_probability": 0.9998,
-      "analysis_time_ms": 82.96
+      "raw_probability": 0.0041,
+      "calibrated_probability": 0.0006,
+      "analysis_time_ms": 74.64
     },
     {
       "case": 55,
@@ -814,12 +800,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 98,
+      "risk_score": 87,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9942,
-      "calibrated_probability": 0.9995,
-      "analysis_time_ms": 73.43
+      "raw_probability": 0.0982,
+      "calibrated_probability": 0.1535,
+      "analysis_time_ms": 82.33
     },
     {
       "case": 56,
@@ -828,12 +814,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 100,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9994,
-      "calibrated_probability": 1.0,
-      "analysis_time_ms": 92.51
+      "raw_probability": 0.006,
+      "calibrated_probability": 0.0011,
+      "analysis_time_ms": 60.62
     },
     {
       "case": 57,
@@ -845,9 +831,9 @@
       "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3906,
-      "calibrated_probability": 0.0404,
-      "analysis_time_ms": 151.31
+      "raw_probability": 0.9587,
+      "calibrated_probability": 0.9996,
+      "analysis_time_ms": 89.39
     },
     {
       "case": 58,
@@ -856,12 +842,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.8819,
-      "calibrated_probability": 0.8321,
-      "analysis_time_ms": 168.34
+      "raw_probability": 0.9974,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 78.85
     },
     {
       "case": 59,
@@ -873,9 +859,9 @@
       "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.1599,
-      "calibrated_probability": 0.004,
-      "analysis_time_ms": 167.15
+      "raw_probability": 0.973,
+      "calibrated_probability": 0.9998,
+      "analysis_time_ms": 76.74
     },
     {
       "case": 60,
@@ -887,9 +873,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0886,
-      "calibrated_probability": 0.0011,
-      "analysis_time_ms": 184.39
+      "raw_probability": 0.9813,
+      "calibrated_probability": 0.9999,
+      "analysis_time_ms": 83.23
     },
     {
       "case": 61,
@@ -898,12 +884,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.1536,
-      "calibrated_probability": 0.0036,
-      "analysis_time_ms": 114.15
+      "raw_probability": 0.9958,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 86.87
     },
     {
       "case": 62,
@@ -912,12 +898,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 89,
+      "risk_score": 97,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.2354,
-      "calibrated_probability": 0.0101,
-      "analysis_time_ms": 186.11
+      "raw_probability": 0.9546,
+      "calibrated_probability": 0.9995,
+      "analysis_time_ms": 112.43
     },
     {
       "case": 63,
@@ -929,9 +915,9 @@
       "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3615,
-      "calibrated_probability": 0.0321,
-      "analysis_time_ms": 162.72
+      "raw_probability": 0.9615,
+      "calibrated_probability": 0.9996,
+      "analysis_time_ms": 113.88
     },
     {
       "case": 64,
@@ -943,9 +929,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.4579,
-      "calibrated_probability": 0.0672,
-      "analysis_time_ms": 153.24
+      "raw_probability": 0.9925,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 97.45
     },
     {
       "case": 65,
@@ -957,9 +943,9 @@
       "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.5687,
-      "calibrated_probability": 0.1461,
-      "analysis_time_ms": 186.92
+      "raw_probability": 0.9786,
+      "calibrated_probability": 0.9999,
+      "analysis_time_ms": 115.59
     },
     {
       "case": 66,
@@ -971,9 +957,9 @@
       "risk_score": 45,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.4575,
-      "calibrated_probability": 0.067,
-      "analysis_time_ms": 236.17
+      "raw_probability": 0.9895,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 191.08
     },
     {
       "case": 67,
@@ -985,9 +971,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0525,
-      "calibrated_probability": 0.0004,
-      "analysis_time_ms": 158.44
+      "raw_probability": 0.9889,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 89.78
     },
     {
       "case": 68,
@@ -996,12 +982,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 96,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.2134,
-      "calibrated_probability": 0.0079,
-      "analysis_time_ms": 193.61
+      "raw_probability": 0.9912,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 129.38
     },
     {
       "case": 69,
@@ -1010,12 +996,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 98,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0,
-      "calibrated_probability": 0.0,
-      "analysis_time_ms": 110.47
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 95.23
     },
     {
       "case": 70,
@@ -1024,12 +1010,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 83,
+      "risk_score": 94,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0,
-      "calibrated_probability": 0.0,
-      "analysis_time_ms": 211.04
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 164.73
     },
     {
       "case": 71,
@@ -1041,9 +1027,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0005,
-      "calibrated_probability": 0.0,
-      "analysis_time_ms": 214.99
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 150.24
     },
     {
       "case": 72,
@@ -1055,9 +1041,9 @@
       "risk_score": 45,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.8065,
-      "calibrated_probability": 0.6149,
-      "analysis_time_ms": 296.19
+      "raw_probability": 0.9999,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 244.83
     },
     {
       "case": 73,
@@ -1066,26 +1052,26 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 94,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0,
-      "calibrated_probability": 0.0,
-      "analysis_time_ms": 203.26
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 239.9
     },
     {
       "case": 74,
       "url": "https://pay-login-security.com",
       "expected": 1,
-      "predicted": 0,
-      "correct": false,
-      "decision": "Safe",
-      "risk_score": 19,
+      "predicted": 1,
+      "correct": true,
+      "decision": "Suspicious",
+      "risk_score": 45,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.348,
-      "calibrated_probability": 0.0287,
-      "analysis_time_ms": 121.72
+      "raw_probability": 0.9633,
+      "calibrated_probability": 0.9996,
+      "analysis_time_ms": 213.5
     },
     {
       "case": 75,
@@ -1097,9 +1083,9 @@
       "risk_score": 45,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.5861,
-      "calibrated_probability": 0.1641,
-      "analysis_time_ms": 186.63
+      "raw_probability": 0.9542,
+      "calibrated_probability": 0.9995,
+      "analysis_time_ms": 248.83
     },
     {
       "case": 76,
@@ -1108,12 +1094,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 89,
+      "risk_score": 98,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3979,
-      "calibrated_probability": 0.0428,
-      "analysis_time_ms": 145.51
+      "raw_probability": 0.9992,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 197.07
     },
     {
       "case": 77,
@@ -1122,12 +1108,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 88,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.1179,
-      "calibrated_probability": 0.002,
-      "analysis_time_ms": 152.26
+      "raw_probability": 0.9938,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 248.75
     },
     {
       "case": 78,
@@ -1139,9 +1125,9 @@
       "risk_score": 45,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.4974,
-      "calibrated_probability": 0.0892,
-      "analysis_time_ms": 208.08
+      "raw_probability": 0.9711,
+      "calibrated_probability": 0.9998,
+      "analysis_time_ms": 195.02
     },
     {
       "case": 79,
@@ -1153,9 +1139,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.7302,
-      "calibrated_probability": 0.4086,
-      "analysis_time_ms": 154.96
+      "raw_probability": 0.9974,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 96.84
     },
     {
       "case": 80,
@@ -1164,12 +1150,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 96,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.6546,
-      "calibrated_probability": 0.257,
-      "analysis_time_ms": 198.24
+      "raw_probability": 0.9984,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 131.3
     },
     {
       "case": 81,
@@ -1178,12 +1164,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 91,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.1907,
-      "calibrated_probability": 0.006,
-      "analysis_time_ms": 206.67
+      "raw_probability": 0.9773,
+      "calibrated_probability": 0.9998,
+      "analysis_time_ms": 139.86
     },
     {
       "case": 82,
@@ -1195,9 +1181,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.7077,
-      "calibrated_probability": 0.3574,
-      "analysis_time_ms": 205.58
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 131.68
     },
     {
       "case": 83,
@@ -1206,12 +1192,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9482,
-      "calibrated_probability": 0.9658,
-      "analysis_time_ms": 206.96
+      "raw_probability": 0.9991,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 141.02
     },
     {
       "case": 84,
@@ -1223,9 +1209,9 @@
       "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0753,
-      "calibrated_probability": 0.0008,
-      "analysis_time_ms": 181.41
+      "raw_probability": 0.9709,
+      "calibrated_probability": 0.9998,
+      "analysis_time_ms": 104.86
     },
     {
       "case": 85,
@@ -1234,12 +1220,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3888,
-      "calibrated_probability": 0.0399,
-      "analysis_time_ms": 187.0
+      "raw_probability": 0.9998,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 111.62
     },
     {
       "case": 86,
@@ -1248,12 +1234,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 89,
+      "risk_score": 94,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0696,
-      "calibrated_probability": 0.0006,
-      "analysis_time_ms": 216.83
+      "raw_probability": 0.734,
+      "calibrated_probability": 0.9814,
+      "analysis_time_ms": 148.72
     },
     {
       "case": 87,
@@ -1262,12 +1248,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 94,
+      "risk_score": 97,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3364,
-      "calibrated_probability": 0.026,
-      "analysis_time_ms": 217.28
+      "raw_probability": 0.9607,
+      "calibrated_probability": 0.9996,
+      "analysis_time_ms": 142.72
     },
     {
       "case": 88,
@@ -1276,12 +1262,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.2591,
-      "calibrated_probability": 0.0128,
-      "analysis_time_ms": 235.41
+      "raw_probability": 0.99,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 133.27
     },
     {
       "case": 89,
@@ -1290,12 +1276,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.188,
-      "calibrated_probability": 0.0058,
-      "analysis_time_ms": 202.42
+      "raw_probability": 0.9853,
+      "calibrated_probability": 0.9999,
+      "analysis_time_ms": 109.45
     },
     {
       "case": 90,
@@ -1304,12 +1290,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 94,
+      "risk_score": 97,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.1615,
-      "calibrated_probability": 0.0041,
-      "analysis_time_ms": 245.32
+      "raw_probability": 0.9576,
+      "calibrated_probability": 0.9995,
+      "analysis_time_ms": 119.53
     },
     {
       "case": 91,
@@ -1318,12 +1304,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.5294,
-      "calibrated_probability": 0.1116,
-      "analysis_time_ms": 238.67
+      "raw_probability": 0.9945,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 137.14
     },
     {
       "case": 92,
@@ -1332,12 +1318,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 83,
+      "risk_score": 96,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0446,
-      "calibrated_probability": 0.0003,
-      "analysis_time_ms": 323.64
+      "raw_probability": 0.9954,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 244.86
     },
     {
       "case": 93,
@@ -1349,9 +1335,9 @@
       "risk_score": 45,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.4493,
-      "calibrated_probability": 0.0631,
-      "analysis_time_ms": 286.68
+      "raw_probability": 0.9945,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 219.89
     },
     {
       "case": 94,
@@ -1360,12 +1346,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 94,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0002,
-      "calibrated_probability": 0.0,
-      "analysis_time_ms": 267.77
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 232.16
     },
     {
       "case": 95,
@@ -1374,12 +1360,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 94,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.0,
-      "calibrated_probability": 0.0,
-      "analysis_time_ms": 273.36
+      "raw_probability": 1.0,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 227.17
     },
     {
       "case": 96,
@@ -1388,12 +1374,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 90,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3149,
-      "calibrated_probability": 0.0216,
-      "analysis_time_ms": 141.52
+      "raw_probability": 0.9981,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 119.73
     },
     {
       "case": 97,
@@ -1402,12 +1388,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.9362,
-      "calibrated_probability": 0.9485,
-      "analysis_time_ms": 143.7
+      "raw_probability": 0.9999,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 132.17
     },
     {
       "case": 98,
@@ -1416,12 +1402,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.4998,
-      "calibrated_probability": 0.0908,
-      "analysis_time_ms": 150.97
+      "raw_probability": 0.9945,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 106.06
     },
     {
       "case": 99,
@@ -1430,12 +1416,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 99,
+      "risk_score": 100,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.3366,
-      "calibrated_probability": 0.0261,
-      "analysis_time_ms": 146.86
+      "raw_probability": 0.9939,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 105.98
     },
     {
       "case": 100,
@@ -1444,12 +1430,12 @@
       "predicted": 1,
       "correct": true,
       "decision": "Phishing",
-      "risk_score": 94,
+      "risk_score": 99,
       "analysis_mode": "full_model",
       "model_available": true,
-      "raw_probability": 0.5472,
-      "calibrated_probability": 0.1262,
-      "analysis_time_ms": 190.18
+      "raw_probability": 0.9992,
+      "calibrated_probability": 1.0,
+      "analysis_time_ms": 149.37
     }
   ]
 }

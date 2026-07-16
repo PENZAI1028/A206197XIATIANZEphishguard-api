@@ -19,7 +19,7 @@ inspectable.
 Artifact SHA-256:
 
 ```text
-a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340
+18053e500d8c22e1ddbab2aa07ac26af2d24e3fb0378ba4f5521c8f0bacd1512
 ```
 
 Dataset SHA-256:
@@ -34,8 +34,16 @@ The serialized bundle is `phishguard_url_pipeline_v4`. Its pipeline combines
 TF-IDF character n-grams (3-5) with 21 lexical URL features and an
 `SGDClassifier` using logistic loss.
 
-After cleaning, the public source dataset contains 235,370 rows: 134,850
-phishing and 100,520 safe. `GroupShuffleSplit` with `random_state=42` and a
+The UCI PhiUSIIL source uses **0 = phishing and 1 = legitimate**. The training
+loader explicitly converts this to the project's API/model invariant:
+**0 = safe or legitimate and 1 = phishing**. Therefore source label 0 maps to
+canonical label 1, source label 1 maps to canonical label 0, and every synthetic
+lookalike is assigned canonical label 1. Regression tests prevent both source
+classes from ever mapping to the same canonical class.
+
+After URL normalisation and deduplication, the public source dataset contains
+235,370 rows: **134,850 safe or legitimate and 100,520 phishing**.
+`GroupShuffleSplit` with `random_state=42` and a
 20% test size groups URLs by registered root-like domain. The split occurs
 before augmentation. The training partition contains 192,971 source rows plus
 50,000 synthetic lookalikes added only to training (242,971 total). The untouched
@@ -45,25 +53,25 @@ holdout contains 42,399 URLs across 32,690 root-domain groups.
 
 | Metric | Value |
 | --- | ---: |
-| Accuracy | 0.9947640275 |
-| Precision | 0.9916847704 |
-| Recall | 1.0000000000 |
-| F1 | 0.9958250273 |
+| Accuracy | 0.9958725442 |
+| Precision | 1.0000000000 |
+| Recall | 0.9890096087 |
+| F1 | 0.9944744403 |
 
 The confusion matrix in `[safe, phishing]` label order is
-`[[15701, 222], [0, 26476]]` (TN, FP, FN, TP).
+`[[26476, 0], [175, 15748]]` (TN, FP, FN, TP).
 
 The separate 100-URL end-to-end API regression set in `backend/test_urls.csv`
-produces 98/100 correct predictions through actual loopback HTTP requests, with
-confusion matrix `[[49, 1], [1, 49]]`. This system-level result includes the API's rules and
+produces 99/100 correct predictions through actual loopback HTTP requests, with
+confusion matrix `[[49, 1], [0, 50]]`. This system-level result includes the API's rules and
 score aggregation and must not be confused with the grouped model holdout.
 
 ## Formal probability calibration
 
 The artifact includes a Platt calibrator fitted on 22,330 grouped-holdout rows
 and evaluated on a disjoint 20,069-row domain-group subset. Brier score improved
-from 0.005243 to 0.003393, 10-bin ECE improved from 0.011899 to 0.001102, and
-log loss improved from 0.027811 to 0.019698. The reliability data and curve are
+from 0.003866 to 0.002635, 10-bin ECE improved from 0.007786 to 0.000987, and
+log loss improved from 0.021560 to 0.015526. The reliability data and curve are
 published under `evaluation/results/`. The calibrated probability is reported
 separately; the established hybrid risk policy uses raw model risk, explicit
 deterministic evidence and documented overrides.
@@ -71,7 +79,7 @@ deterministic evidence and documented overrides.
 ## Additional evaluation evidence
 
 - `evaluation/results/http_performance.json` measures 100 warmed sequential
-  loopback HTTP `/predict` requests. P95 is 148.73 ms against the 250 ms NFR.
+  loopback HTTP `/predict` requests. P95 is 135.42 ms against the 250 ms NFR.
 - `evaluation/results/ablation_results.json` compares rules only, calibrated AI
   only, AI plus deterministic rules, and the full system with reputation.
 - `evaluation/results/model_comparison.json` compares Logistic Regression, SGD,
@@ -119,7 +127,7 @@ Recreate the training environment and rerun training from `phishguard/`:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r training/requirements-training.txt
-.\.venv\Scripts\python.exe training/train_url_model.py --data dataset/PhiUSIIL_Phishing_URL_Dataset.csv --min-rows 100000 --max-rows 1000000 --target 0.99
+.\.venv\Scripts\python.exe training/train_url_model.py --data dataset/PhiUSIIL_Phishing_URL_Dataset.csv --min-rows 100000 --max-rows 1000000 --target 0.98 --phishing-value 0
 ```
 
 The JSON evidence file duplicates the material fields from the serialized

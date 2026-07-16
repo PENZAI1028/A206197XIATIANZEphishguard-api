@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="680" height="640" viewBox="0 0 680 640">
 <rect width="100%" height="100%" fill="white"/><text x="340" y="28" text-anchor="middle" font-family="Arial" font-size="20">Probability calibration reliability curve</text>
 <line x1="60" y1="560" x2="560" y2="60" stroke="#777" stroke-dasharray="6 6"/><line x1="60" y1="560" x2="560" y2="560" stroke="black"/><line x1="60" y1="560" x2="60" y2="60" stroke="black"/>
-<polyline points="62.4,560.0 133.4,560.0 180.9,560.0 233.6,560.0 282.7,560.0 337.2,560.0 378.9,512.4 439.0,360.0 491.6,210.0 554.3,61.8" fill="none" stroke="#d55e00" stroke-width="3"/><polyline points="60.3,560.0 133.4,560.0 175.8,504.4 238.9,435.0 283.6,393.3 339.7,310.0 391.5,367.7 434.3,240.0 493.8,119.3 558.2,61.7" fill="none" stroke="#0072b2" stroke-width="3"/>
+<polyline points="64.0,558.2 128.6,414.8 185.5,196.4 229.9,60.0 279.6,60.0 332.3,60.0 378.4,60.0 442.4,60.0 489.1,60.0 557.8,60.0" fill="none" stroke="#d55e00" stroke-width="3"/><polyline points="61.4,558.4 129.7,435.0 178.2,460.0 235.0,310.0 291.7,560.0 337.4,202.9 370.1,60.0 426.6,60.0 485.4,60.0 559.7,60.0" fill="none" stroke="#0072b2" stroke-width="3"/>
 <text x="310" y="610" text-anchor="middle" font-family="Arial">Mean predicted probability</text><text x="18" y="310" text-anchor="middle" transform="rotate(-90 18 310)" font-family="Arial">Observed phishing frequency</text>
 <line x1="575" y1="90" x2="610" y2="90" stroke="#d55e00" stroke-width="3"/><text x="615" y="95" font-family="Arial" font-size="13">Before</text><line x1="575" y1="118" x2="610" y2="118" stroke="#0072b2" stroke-width="3"/><text x="615" y="123" font-family="Arial" font-size="13">After</text>
 </svg>

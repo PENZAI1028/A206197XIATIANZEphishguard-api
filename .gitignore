@@ -28,6 +28,7 @@ phishguard/training/*
 !phishguard/training/train_url_model.py
 !phishguard/training/requirements-training.txt
 !phishguard/training/calibrate_model_bundle.py
+!phishguard/training/publish_model_metadata.py
 !phishguard/evaluation/
 phishguard/dataset/raw/
 phishguard/dataset/PhishGuard_*.csv

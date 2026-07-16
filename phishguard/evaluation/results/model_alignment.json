@@ -1,8 +1,8 @@
 {
-  "generated_at_utc": "2026-07-16T09:21:09.016177+00:00",
+  "generated_at_utc": "2026-07-16T09:43:11.763817+00:00",
   "audit_status": "PASS",
   "scope": "Deployed artifact, feature contract, classifier, runtime dependencies, reproduced grouped holdout, calibration partition and Flask inference",
-  "checks_passed": 28,
+  "checks_passed": 34,
   "checks_failed": 0,
   "checks": [
     {
@@ -14,8 +14,8 @@
     {
       "check": "artifact SHA-256",
       "status": "PASS",
-      "observed": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340",
-      "expected": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340"
+      "observed": "18053e500d8c22e1ddbab2aa07ac26af2d24e3fb0378ba4f5521c8f0bacd1512",
+      "expected": "18053e500d8c22e1ddbab2aa07ac26af2d24e3fb0378ba4f5521c8f0bacd1512"
     },
     {
       "check": "bundle format",
@@ -28,6 +28,48 @@
       "status": "PASS",
       "observed": "PhishGuard Character-Ngram + Lexical URL Classifier",
       "expected": "PhishGuard Character-Ngram + Lexical URL Classifier"
+    },
+    {
+      "check": "PhiUSIIL source label contract",
+      "status": "PASS",
+      "observed": {
+        "0": "phishing",
+        "1": "legitimate"
+      },
+      "expected": {
+        "0": "phishing",
+        "1": "legitimate"
+      }
+    },
+    {
+      "check": "project canonical label contract",
+      "status": "PASS",
+      "observed": {
+        "0": "safe_or_legitimate",
+        "1": "phishing"
+      },
+      "expected": {
+        "0": "safe_or_legitimate",
+        "1": "phishing"
+      }
+    },
+    {
+      "check": "bundle source phishing value",
+      "status": "PASS",
+      "observed": "0",
+      "expected": "0"
+    },
+    {
+      "check": "cleaned canonical class counts",
+      "status": "PASS",
+      "observed": {
+        "0_safe_or_legitimate": 134850,
+        "1_phishing": 100520
+      },
+      "expected": {
+        "0_safe_or_legitimate": 134850,
+        "1_phishing": 100520
+      }
     },
     {
       "check": "TF-IDF analyzer",
@@ -148,6 +190,24 @@
       "expected": "LogisticRegression"
     },
     {
+      "check": "known legitimate orientation sanity check",
+      "status": "PASS",
+      "observed": [
+        0.03647367599907995,
+        0.010049158822010929
+      ],
+      "expected": "both canonical phishing probabilities below 0.50"
+    },
+    {
+      "check": "known phishing orientation sanity check",
+      "status": "PASS",
+      "observed": [
+        0.99992256140696,
+        0.9999999992386512
+      ],
+      "expected": "both canonical phishing probabilities above 0.50"
+    },
+    {
       "check": "training requirements installed",
       "status": "PASS",
       "observed": {
@@ -180,48 +240,48 @@
     {
       "check": "holdout accuracy",
       "status": "PASS",
-      "observed": 0.9947640274534777,
-      "expected": 0.9947640274534777
+      "observed": 0.9958725441637775,
+      "expected": 0.9958725441637775
     },
     {
       "check": "holdout precision",
-      "status": "PASS",
-      "observed": 0.9916847703947861,
-      "expected": 0.9916847703947861
-    },
-    {
-      "check": "holdout recall",
       "status": "PASS",
       "observed": 1.0,
       "expected": 1.0
     },
     {
+      "check": "holdout recall",
+      "status": "PASS",
+      "observed": 0.9890096087420712,
+      "expected": 0.9890096087420712
+    },
+    {
       "check": "holdout f1",
       "status": "PASS",
-      "observed": 0.995825027268966,
-      "expected": 0.995825027268966
+      "observed": 0.994474440339743,
+      "expected": 0.994474440339743
     },
     {
       "check": "holdout confusion matrix",
       "status": "PASS",
       "observed": [
         [
-          15701,
-          222
+          26476,
+          0
         ],
         [
-          0,
-          26476
+          175,
+          15748
         ]
       ],
       "expected": [
         [
-          15701,
-          222
+          26476,
+          0
         ],
         [
-          0,
-          26476
+          175,
+          15748
         ]
       ]
     },
@@ -264,13 +324,13 @@
     {
       "check": "API raw model probability exposed",
       "status": "PASS",
-      "observed": 0.5528,
+      "observed": 0.795,
       "expected": "non-null"
     },
     {
       "check": "API calibrated probability exposed",
       "status": "PASS",
-      "observed": 0.1311,
+      "observed": 0.9897,
       "expected": "non-null"
     }
   ],

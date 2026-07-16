@@ -50,7 +50,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--url-column", default=None)
     parser.add_argument("--label-column", default=None)
-    parser.add_argument("--phishing-value", default="1")
+    parser.add_argument("--phishing-value", default="0")
     parser.add_argument("--max-rows", type=int, default=1_000_000)
     parser.add_argument("--test-size", type=float, default=0.20)
     parser.add_argument("--seed", type=int, default=42)
@@ -155,6 +155,12 @@ def main() -> None:
             "rows_after_cleaning_and_url_deduplication": int(len(working)),
             "duplicated_url_rows_before_deduplication": duplicated_url_rows,
             "conflicting_label_normalised_url_count_before_deduplication": conflicting_url_count,
+            "source_label_semantics": {"0": "phishing", "1": "legitimate"},
+            "canonical_label_semantics": {"0": "safe_or_legitimate", "1": "phishing"},
+            "canonical_class_counts_after_cleaning": {
+                "safe_or_legitimate_0": int((working["label"] == 0).sum()),
+                "phishing_1": int((working["label"] == 1).sum()),
+            },
         },
         "protocol": {
             "outer_split": "GroupShuffleSplit by registered root-like domain",
@@ -168,6 +174,7 @@ def main() -> None:
             "source_train_rows": int(len(source_train)),
             "source_train_groups": int(source_train["group"].nunique()),
             "synthetic_train_only_rows": int(len(synthetic)),
+            "synthetic_canonical_labels": sorted(int(value) for value in synthetic["label"].unique()),
             "holdout_rows": int(len(holdout)),
             "holdout_groups": int(holdout["group"].nunique()),
             "calibration_rows": int(len(calibration)),
