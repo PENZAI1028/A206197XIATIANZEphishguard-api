@@ -3,11 +3,11 @@ import unittest
 from backend.app import (
     detect_homograph_attack,
     detect_official_domain,
+    detect_brand_impersonation,
     domain_is_official,
     get_domain,
     get_shared_hosting_provider,
 )
-from backend.phishguard_v10_model import brand_signals
 
 
 class V10RulesTests(unittest.TestCase):
@@ -40,13 +40,11 @@ class V10RulesTests(unittest.TestCase):
         ):
             self.assert_danger(url)
 
-    def test_dynamic_model_brand_features(self):
-        exact, confusable, near, unofficial, official = brand_signals("b1nance-login.com")
-        self.assertEqual(confusable, 1.0)
-        self.assertEqual(unofficial, 1.0)
-        self.assertEqual(official, 0.0)
-        _, _, _, _, official_binance = brand_signals("binance.com")
-        self.assertEqual(official_binance, 1.0)
+    def test_canonical_runtime_brand_features(self):
+        brand = detect_brand_impersonation("b1nance-login.com")
+        self.assertGreaterEqual(brand["score"], 70)
+        self.assertFalse(domain_is_official("b1nance-login.com")[0])
+        self.assertTrue(domain_is_official("binance.com")[0])
 
     def test_shared_platforms_not_blanket_trusted(self):
         for url in ("https://someone.github.io/page", "https://example.onrender.com", "https://pages.dev/"):

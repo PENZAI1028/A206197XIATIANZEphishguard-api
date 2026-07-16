@@ -1,7 +1,13 @@
 import unittest
 
-from backend.app import detect_homograph_attack, detect_official_domain, domain_is_official, get_domain
-from backend.phishguard_v11_model import brand_signals, has_risk_confusable_marker
+from backend.app import (
+    detect_homograph_attack,
+    detect_official_domain,
+    detect_brand_impersonation,
+    domain_is_official,
+    get_domain,
+    has_confusable_marker,
+)
 
 
 class V11RulesTests(unittest.TestCase):
@@ -20,20 +26,16 @@ class V11RulesTests(unittest.TestCase):
             self.assert_danger(url)
 
     def test_plain_i_and_l_are_not_markers(self):
-        self.assertFalse(has_risk_confusable_marker("chdpublication"))
-        self.assertFalse(has_risk_confusable_marker("microwaves"))
-        self.assertTrue(has_risk_confusable_marker("b1nance"))
-        self.assertTrue(has_risk_confusable_marker("g00gle"))
+        self.assertFalse(has_confusable_marker("chdpublication"))
+        self.assertFalse(has_confusable_marker("microwaves"))
+        self.assertTrue(has_confusable_marker("b1nance"))
+        self.assertTrue(has_confusable_marker("g00gle"))
 
-    def test_model_brand_features(self):
-        _, marked, _, unofficial, official = brand_signals("b1nance-login.com")
-        self.assertEqual(marked, 1.0)
-        self.assertEqual(unofficial, 1.0)
-        self.assertEqual(official, 0.0)
-        _, marked_real, _, unofficial_real, official_real = brand_signals("binance.com")
-        self.assertEqual(marked_real, 0.0)
-        self.assertEqual(unofficial_real, 0.0)
-        self.assertEqual(official_real, 1.0)
+    def test_canonical_runtime_brand_features(self):
+        brand = detect_brand_impersonation("b1nance-login.com")
+        self.assertGreaterEqual(brand["score"], 70)
+        self.assertFalse(domain_is_official("b1nance-login.com")[0])
+        self.assertTrue(domain_is_official("binance.com")[0])
 
 
 if __name__ == "__main__":
