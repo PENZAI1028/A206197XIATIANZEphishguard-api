@@ -21,11 +21,14 @@ phishguard/backend/phishing_web_model.backup-*.pkl
 
 # Local experiments and generated training artifacts
 phishguard/backup/
-phishguard/training/
+phishguard/training/*
+!phishguard/training/train_url_model.py
+!phishguard/training/requirements-training.txt
+!phishguard/training/calibrate_model_bundle.py
+!phishguard/evaluation/
 phishguard/dataset/raw/
 phishguard/dataset/PhishGuard_*.csv
 phishguard/dataset/PhishGuard_*_manifest.json
 phishguard/backend/.python-version
-phishguard/backend/phishguard_ml_features.py
 phishguard/backend/phishguard_streaming_model*.py
 phishguard/backend/phishguard_v*_features.py

@@ -1,238 +1,94 @@
 {
-  "trained_at": "2026-06-25T13:32:32",
-  "model_name": "Enhanced Extra Trees URL Classifier",
-  "feature_count": 22,
-  "training_rows": 239084,
-  "label_distribution": {
-    "0": 100723,
-    "1": 138361
+  "format": "phishguard_url_pipeline_v4",
+  "model_name": "PhishGuard Character-Ngram + Lexical URL Classifier",
+  "generated_at_utc": "2026-06-28T06:46:26.708572+00:00",
+  "artifact": "phishing_web_model.pkl",
+  "artifact_sha256": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340",
+  "source_data": "dataset/PhiUSIIL_Phishing_URL_Dataset.csv",
+  "source_data_sha256": "a236549cd369cd80bd478ff8e1779cbf44c58d5c3f79f7a51a1adbed7d06d1c6",
+  "url_column": "URL",
+  "label_column": "label",
+  "phishing_value": "1",
+  "source_rows_after_cleaning": 235370,
+  "source_class_counts": {
+    "1": 134850,
+    "0": 100520
   },
-  "source_distribution": {
-    "PhiUSIIL": 235370,
-    "synthetic_phishing": 3461,
-    "synthetic_safe": 153,
-    "local_regression_cases": 100
+  "split": {
+    "method": "GroupShuffleSplit",
+    "group": "registered root-like domain",
+    "random_state": 42,
+    "test_size": 0.2,
+    "train_rows_before_synthetic": 192971,
+    "synthetic_lookalike_rows_train_only": 50000,
+    "train_rows_total": 242971,
+    "holdout_rows": 42399,
+    "holdout_distinct_root_domains": 32690,
+    "leakage_control": "The domain-group split was performed before synthetic augmentation; synthetic lookalikes were added only to training."
   },
-  "metrics": {
-    "accuracy": 0.9963,
-    "balanced_accuracy": 0.9957,
-    "precision": 0.9942,
-    "recall": 0.9995,
-    "f1": 0.9968,
-    "roc_auc": 0.9983,
+  "model": {
+    "text_features": "TF-IDF character n-grams (3-5)",
+    "lexical_feature_count": 21,
+    "classifier": "SGDClassifier(loss=log_loss, alpha=0.000004, class_weight=balanced, early_stopping=true, n_iter_no_change=8, random_state=42)"
+  },
+  "holdout_metrics": {
+    "accuracy": 0.9947640274534777,
+    "precision": 0.9916847703947861,
+    "recall": 1.0,
+    "f1": 0.995825027268966,
     "confusion_matrix": [
-      [
-        19984,
-        161
-      ],
-      [
-        15,
-        27657
-      ]
-    ],
-    "critical_regression_accuracy": 0.96
+      [15701, 222],
+      [0, 26476]
+    ]
   },
-  "critical_regression_cases": [
-    {
-      "name": "official_google",
-      "url": "https://www.google.com",
-      "expected": 0,
-      "predicted": 0,
-      "phishing_probability": 0.036,
-      "pass": true
-    },
-    {
-      "name": "official_render_dashboard",
-      "url": "https://dashboard.render.com/web/srv-d8o2c6kvikkc73e1gttg/settings",
-      "expected": 0,
-      "predicted": 0,
-      "phishing_probability": 0.0179,
-      "pass": true
-    },
-    {
-      "name": "official_render_api",
-      "url": "https://a206197xiatianzephishguard-api.onrender.com/predict",
-      "expected": 0,
-      "predicted": 0,
-      "phishing_probability": 0.0232,
-      "pass": true
-    },
-    {
-      "name": "official_cisco",
-      "url": "https://www.cisco.com/",
-      "expected": 0,
-      "predicted": 0,
-      "phishing_probability": 0.0231,
-      "pass": true
-    },
-    {
-      "name": "official_whatsapp",
-      "url": "https://www.whatsapp.com/",
-      "expected": 0,
-      "predicted": 0,
-      "phishing_probability": 0.0222,
-      "pass": true
-    },
-    {
-      "name": "lookalike_google_digit",
-      "url": "https://www.goog1e.com",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9622,
-      "pass": true
-    },
-    {
-      "name": "lookalike_google_mixed",
-      "url": "https://G0og1e.com",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9431,
-      "pass": true
-    },
-    {
-      "name": "lookalike_cisco_digit",
-      "url": "https://Cisc0.com/login",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.8523,
-      "pass": true
-    },
-    {
-      "name": "lookalike_paypal_upper_i",
-      "url": "https://paypaI.com",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9501,
-      "pass": true
-    },
-    {
-      "name": "lookalike_microsoft_rn",
-      "url": "https://rnicrosoft.com",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9324,
-      "pass": true
-    },
-    {
-      "name": "lookalike_whatsapp_q",
-      "url": "https://whatsapq.com/login",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.6821,
-      "pass": true
-    },
-    {
-      "name": "shortener_whatsapp_path",
-      "url": "https://goo.su/i.whatAapp",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9984,
-      "pass": true
-    },
-    {
-      "name": "shortener_whatsapp_leading_dot",
-      "url": ".https://goo.su/i.whatAapp",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9984,
-      "pass": true
-    },
-    {
-      "name": "shortener_whatsapp_fullwidth_colon",
-      "url": ".https\uff1a//goo.su/i.whatAapp",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9984,
-      "pass": true
-    },
-    {
-      "name": "shortener_whatsapp_double_scheme",
-      "url": "https://https://goo.su/i.whatAapp",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9984,
-      "pass": true
-    },
-    {
-      "name": "shortener_whatsapp_hidden_scheme",
-      "url": "https://.https://goo.su/i.whatAapp",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9984,
-      "pass": true
-    },
-    {
-      "name": "shortener_paypal_path",
-      "url": "https://bit.ly/paypaI-login",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9987,
-      "pass": true
-    },
-    {
-      "name": "brand_phishing_paypal",
-      "url": "http://paypal-login-security.com",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9626,
-      "pass": true
-    },
-    {
-      "name": "ip_login_private",
-      "url": "http://192.168.1.10/login",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.7783,
-      "pass": true
-    },
-    {
-      "name": "at_redirect",
-      "url": "http://paypal.com@evil-site.ru/login",
-      "expected": 1,
-      "predicted": 0,
-      "phishing_probability": 0.4513,
-      "pass": false
-    },
-    {
-      "name": "brand_subdomain_abuse",
-      "url": "https://paypal.com.login.verify.security.xyz",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.8846,
-      "pass": true
-    },
-    {
-      "name": "malaysia_bank_abuse",
-      "url": "https://maybank2u.com.my.login-security.xyz",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9243,
-      "pass": true
-    },
-    {
-      "name": "unseen_google_variant",
-      "url": "https://g00gle-account-verify.click/login",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.9725,
-      "pass": true
-    },
-    {
-      "name": "unseen_ip_variant",
-      "url": "http://10.10.10.22/secure/account",
-      "expected": 1,
-      "predicted": 1,
-      "phishing_probability": 0.7722,
-      "pass": true
-    },
-    {
-      "name": "unseen_render_safe",
-      "url": "https://dashboard.render.com/web/srv-newdemo/settings",
-      "expected": 0,
-      "predicted": 0,
-      "phishing_probability": 0.0179,
-      "pass": true
-    }
-  ],
-  "backup_model": "phishing_web_model.backup-20260625-133232.pkl"
+  "probability_calibration": {
+    "method": "Platt scaling (logistic regression on raw-probability logits)",
+    "outer_holdout_rows": 42399,
+    "calibration_rows": 22330,
+    "evaluation_rows": 20069,
+    "calibration_distinct_root_domains": 16345,
+    "evaluation_distinct_root_domains": 16345,
+    "brier_before": 0.005243224974920196,
+    "brier_after": 0.003393301950906766,
+    "ece_10_bins_before": 0.011899137852074344,
+    "ece_10_bins_after": 0.0011015924232317647,
+    "log_loss_before": 0.02781093475667478,
+    "log_loss_after": 0.01969784757774284,
+    "decision_threshold": 0.6555485414293785,
+    "runtime_policy": "The calibrated probability is reported separately. The established hybrid score uses raw model risk plus deterministic evidence and documented overrides."
+  },
+  "api_regression_test": {
+    "dataset": "backend/test_urls.csv",
+    "rows": 100,
+    "accuracy": 0.98,
+    "precision": 0.98,
+    "recall": 0.98,
+    "f1": 0.98,
+    "confusion_matrix": [
+      [49, 1],
+      [1, 49]
+    ],
+    "scope": "End-to-end loopback HTTP POST /predict regression; this is separate from the grouped model holdout.",
+    "result_files": [
+      "evaluation/results/system_regression_current.json",
+      "evaluation/results/system_regression_current.csv"
+    ]
+  },
+  "http_performance": {
+    "procedure": "100 warmed sequential loopback HTTP POST /predict requests after 10 warm-up requests",
+    "mean_ms": 112.7737869998964,
+    "median_ms": 125.18515000192565,
+    "p95_ms": 148.72927999604144,
+    "maximum_ms": 163.3706000066013,
+    "nfr_threshold_ms": 250,
+    "passes": true
+  },
+  "training_environment": {
+    "python": "3.14.6",
+    "joblib": "1.5.3",
+    "numpy": "2.5.0",
+    "pandas": "3.0.3",
+    "scipy": "1.18.0",
+    "scikit-learn": "1.9.0"
+  }
 }

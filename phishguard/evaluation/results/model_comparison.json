@@ -1,0 +1,67 @@
+{
+  "generated_at_utc": "2026-07-16T05:03:52.448326+00:00",
+  "scope": "bounded candidate comparison; same TF-IDF character 3-5 gram plus 21-lexical feature matrix for all models",
+  "source_rows": 20000,
+  "train_rows": 15740,
+  "test_rows": 4260,
+  "group_split_random_state": 42,
+  "max_tfidf_features": 20000,
+  "feature_fit_transform_seconds": 6.255561500001932,
+  "selection_note": "The production SGD choice also considers sparse scalability, probability support and deployment size; this benchmark is comparative evidence, not a universal ranking.",
+  "results": [
+    {
+      "model": "Logistic Regression",
+      "accuracy": 0.9887323943661972,
+      "precision": 0.981198589894242,
+      "recall": 1.0,
+      "f1": 0.9905100830367735,
+      "fit_seconds": 0.6661367999986396,
+      "predict_seconds": 0.003446399998210836
+    },
+    {
+      "model": "SGD log-loss",
+      "accuracy": 0.9936619718309859,
+      "precision": 0.9893364928909952,
+      "recall": 1.0,
+      "f1": 0.9946396664681358,
+      "fit_seconds": 0.12441689999832306,
+      "predict_seconds": 0.0019799999936367385
+    },
+    {
+      "model": "Linear SVM",
+      "accuracy": 0.9929577464788732,
+      "precision": 0.9881656804733728,
+      "recall": 1.0,
+      "f1": 0.9940476190476191,
+      "fit_seconds": 0.187106200006383,
+      "predict_seconds": 0.004387000000861008
+    },
+    {
+      "model": "Random Forest",
+      "accuracy": 0.9938967136150235,
+      "precision": 0.9908910891089109,
+      "recall": 0.9988023952095808,
+      "f1": 0.994831013916501,
+      "fit_seconds": 0.58520629999839,
+      "predict_seconds": 0.08168619999923976
+    },
+    {
+      "model": "Extra Trees",
+      "accuracy": 0.9910798122065728,
+      "precision": 0.9850570192685805,
+      "recall": 1.0,
+      "f1": 0.992472266244057,
+      "fit_seconds": 0.4294086000008974,
+      "predict_seconds": 0.07831069999519968
+    },
+    {
+      "model": "Complement Naive Bayes",
+      "accuracy": 0.9483568075117371,
+      "precision": 0.9201912467819051,
+      "recall": 0.9988023952095808,
+      "f1": 0.9578866768759571,
+      "fit_seconds": 0.03010859999631066,
+      "predict_seconds": 0.0064211999997496605
+    }
+  ]
+}

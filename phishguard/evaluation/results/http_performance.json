@@ -1,0 +1,13 @@
+{
+  "generated_at_utc": "2026-07-16T05:02:48.127731+00:00",
+  "target": "warmed loopback HTTP POST /predict",
+  "warmup_requests": 10,
+  "measured_requests": 100,
+  "mean_ms": 112.7737869998964,
+  "median_ms": 125.18515000192565,
+  "p95_ms": 148.72927999604144,
+  "min_ms": 43.54990000138059,
+  "max_ms": 163.3706000066013,
+  "nfr_threshold_ms": 250,
+  "passes_nfr": true
+}
