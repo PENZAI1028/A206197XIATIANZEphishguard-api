@@ -11,6 +11,8 @@ inspectable.
 - Machine-readable evidence: `backend/phishing_web_model_metadata.json`
 - Training entry point: `training/train_url_model.py`
 - Custom lexical transformer: `backend/phishguard_ml_features.py`
+- Executable model-alignment audit: `evaluation/audit_model_alignment.py`
+- Executable split-integrity audit: `evaluation/audit_split_integrity.py`
 - Exact training dependencies: `training/requirements-training.txt`
 - Source dataset: `dataset/PhiUSIIL_Phishing_URL_Dataset.csv`
 
@@ -123,3 +125,17 @@ python -m venv .venv
 The JSON evidence file duplicates the material fields from the serialized
 bundle so they can be reviewed without executing a pickle. As with any pickle,
 only load the artifact from a trusted repository revision.
+
+Run the complete executable consistency checks from `phishguard/`:
+
+```powershell
+.\.venv\Scripts\python.exe evaluation/audit_model_alignment.py
+.\.venv\Scripts\python.exe evaluation/audit_split_integrity.py
+```
+
+The current published outputs are `evaluation/results/model_alignment.json`
+and `evaluation/results/split_integrity.json`. The model-alignment audit reloads
+the actual pkl, inspects the character 3-5 gram vectorizer and 21-feature
+transformer, checks the SGD parameters and dependency versions, reconstructs
+all 42,399 grouped-holdout predictions, verifies the confusion matrix and sends
+a real Flask test-client request through `/predict`.

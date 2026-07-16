@@ -1,0 +1,42 @@
+{
+  "generated_at_utc": "2026-07-16T09:21:21.154624+00:00",
+  "audit_status": "PASS",
+  "dataset": {
+    "path": "PhiUSIIL_Phishing_URL_Dataset.csv",
+    "sha256": "a236549cd369cd80bd478ff8e1779cbf44c58d5c3f79f7a51a1adbed7d06d1c6",
+    "source_rows": 235795,
+    "rows_before_url_deduplication": 235795,
+    "rows_after_cleaning_and_url_deduplication": 235370,
+    "duplicated_url_rows_before_deduplication": 850,
+    "conflicting_label_normalised_url_count_before_deduplication": 0
+  },
+  "protocol": {
+    "outer_split": "GroupShuffleSplit by registered root-like domain",
+    "outer_test_size": 0.2,
+    "outer_random_state": 42,
+    "calibration_split": "50/50 GroupShuffleSplit within untouched outer holdout",
+    "calibration_random_state": 43,
+    "synthetic_policy": "Generated only after the outer split and appended only to training"
+  },
+  "partitions": {
+    "source_train_rows": 192971,
+    "source_train_groups": 130758,
+    "synthetic_train_only_rows": 50000,
+    "holdout_rows": 42399,
+    "holdout_groups": 32690,
+    "calibration_rows": 22330,
+    "calibration_groups": 16345,
+    "calibration_evaluation_rows": 20069,
+    "calibration_evaluation_groups": 16345
+  },
+  "checks": {
+    "source_train_vs_holdout_group_overlap": 0,
+    "source_train_vs_holdout_normalised_url_overlap": 0,
+    "calibration_vs_evaluation_group_overlap": 0,
+    "calibration_vs_evaluation_normalised_url_overlap": 0,
+    "synthetic_train_vs_holdout_normalised_url_overlap": 0,
+    "empty_root_group_rows": 0,
+    "conflicting_label_normalised_url_count_before_deduplication": 0
+  },
+  "interpretation": "PASS means no group or exact normalised-URL intersection was found between the reproduced partitions, no synthetic training URL appeared in the holdout, and no conflicting label remained for the same normalised URL before deduplication. This does not replace future temporal or independent-source external validation."
+}

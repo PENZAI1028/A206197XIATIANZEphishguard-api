@@ -18,6 +18,9 @@ Thumbs.db
 
 # Local model backups are not deployment artifacts
 phishguard/backend/phishing_web_model.backup-*.pkl
+phishguard/backend/phishing_model*.pkl
+# The only tracked production artifact is:
+# phishguard/backend/phishing_web_model.pkl
 
 # Local experiments and generated training artifacts
 phishguard/backup/

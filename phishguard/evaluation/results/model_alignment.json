@@ -1,0 +1,282 @@
+{
+  "generated_at_utc": "2026-07-16T09:21:09.016177+00:00",
+  "audit_status": "PASS",
+  "scope": "Deployed artifact, feature contract, classifier, runtime dependencies, reproduced grouped holdout, calibration partition and Flask inference",
+  "checks_passed": 28,
+  "checks_failed": 0,
+  "checks": [
+    {
+      "check": "artifact filename",
+      "status": "PASS",
+      "observed": "phishing_web_model.pkl",
+      "expected": "phishing_web_model.pkl"
+    },
+    {
+      "check": "artifact SHA-256",
+      "status": "PASS",
+      "observed": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340",
+      "expected": "a00c7ef3fa7c5e26479709f1f151d8d67238e460fd846ce3adbb15e9b53dc340"
+    },
+    {
+      "check": "bundle format",
+      "status": "PASS",
+      "observed": "phishguard_url_pipeline_v4",
+      "expected": "phishguard_url_pipeline_v4"
+    },
+    {
+      "check": "model name",
+      "status": "PASS",
+      "observed": "PhishGuard Character-Ngram + Lexical URL Classifier",
+      "expected": "PhishGuard Character-Ngram + Lexical URL Classifier"
+    },
+    {
+      "check": "TF-IDF analyzer",
+      "status": "PASS",
+      "observed": "char",
+      "expected": "char"
+    },
+    {
+      "check": "TF-IDF n-gram range",
+      "status": "PASS",
+      "observed": [
+        3,
+        5
+      ],
+      "expected": [
+        3,
+        5
+      ]
+    },
+    {
+      "check": "lexical feature count",
+      "status": "PASS",
+      "observed": 21,
+      "expected": 21
+    },
+    {
+      "check": "lexical transformer output",
+      "status": "PASS",
+      "observed": [
+        1,
+        21
+      ],
+      "expected": [
+        1,
+        21
+      ]
+    },
+    {
+      "check": "metadata lexical names",
+      "status": "PASS",
+      "observed": [
+        "url_length",
+        "host_length",
+        "path_length",
+        "query_length",
+        "host_dot_count",
+        "host_hyphen_count",
+        "at_count",
+        "question_count",
+        "equals_count",
+        "percent_count",
+        "slash_count",
+        "digit_count",
+        "digit_ratio",
+        "special_character_count",
+        "suspicious_token_count",
+        "https_flag",
+        "ip_host_flag",
+        "punycode_flag",
+        "root_label_digit_flag",
+        "url_length_at_least_80_flag",
+        "url_length_at_least_120_flag"
+      ],
+      "expected": [
+        "url_length",
+        "host_length",
+        "path_length",
+        "query_length",
+        "host_dot_count",
+        "host_hyphen_count",
+        "at_count",
+        "question_count",
+        "equals_count",
+        "percent_count",
+        "slash_count",
+        "digit_count",
+        "digit_ratio",
+        "special_character_count",
+        "suspicious_token_count",
+        "https_flag",
+        "ip_host_flag",
+        "punycode_flag",
+        "root_label_digit_flag",
+        "url_length_at_least_80_flag",
+        "url_length_at_least_120_flag"
+      ]
+    },
+    {
+      "check": "classifier type",
+      "status": "PASS",
+      "observed": "SGDClassifier",
+      "expected": "SGDClassifier"
+    },
+    {
+      "check": "classifier parameters",
+      "status": "PASS",
+      "observed": {
+        "loss": "log_loss",
+        "alpha": 4e-06,
+        "class_weight": "balanced",
+        "early_stopping": true,
+        "n_iter_no_change": 8,
+        "random_state": 42
+      },
+      "expected": {
+        "loss": "log_loss",
+        "alpha": 4e-06,
+        "class_weight": "balanced",
+        "early_stopping": true,
+        "n_iter_no_change": 8,
+        "random_state": 42
+      }
+    },
+    {
+      "check": "formal calibrator present",
+      "status": "PASS",
+      "observed": "LogisticRegression",
+      "expected": "LogisticRegression"
+    },
+    {
+      "check": "training requirements installed",
+      "status": "PASS",
+      "observed": {
+        "joblib": "1.5.3",
+        "numpy": "2.5.0",
+        "pandas": "3.0.3",
+        "scipy": "1.18.0",
+        "scikit-learn": "1.9.0"
+      },
+      "expected": {
+        "joblib": "1.5.3",
+        "numpy": "2.5.0",
+        "pandas": "3.0.3",
+        "scipy": "1.18.0",
+        "scikit-learn": "1.9.0"
+      }
+    },
+    {
+      "check": "Python runtime",
+      "status": "PASS",
+      "observed": "3.14.6",
+      "expected": "3.14.6"
+    },
+    {
+      "check": "holdout row count",
+      "status": "PASS",
+      "observed": 42399,
+      "expected": 42399
+    },
+    {
+      "check": "holdout accuracy",
+      "status": "PASS",
+      "observed": 0.9947640274534777,
+      "expected": 0.9947640274534777
+    },
+    {
+      "check": "holdout precision",
+      "status": "PASS",
+      "observed": 0.9916847703947861,
+      "expected": 0.9916847703947861
+    },
+    {
+      "check": "holdout recall",
+      "status": "PASS",
+      "observed": 1.0,
+      "expected": 1.0
+    },
+    {
+      "check": "holdout f1",
+      "status": "PASS",
+      "observed": 0.995825027268966,
+      "expected": 0.995825027268966
+    },
+    {
+      "check": "holdout confusion matrix",
+      "status": "PASS",
+      "observed": [
+        [
+          15701,
+          222
+        ],
+        [
+          0,
+          26476
+        ]
+      ],
+      "expected": [
+        [
+          15701,
+          222
+        ],
+        [
+          0,
+          26476
+        ]
+      ]
+    },
+    {
+      "check": "calibration/evaluation group overlap",
+      "status": "PASS",
+      "observed": 0,
+      "expected": 0
+    },
+    {
+      "check": "calibration row count",
+      "status": "PASS",
+      "observed": 22330,
+      "expected": 22330
+    },
+    {
+      "check": "calibration evaluation row count",
+      "status": "PASS",
+      "observed": 20069,
+      "expected": 20069
+    },
+    {
+      "check": "API prediction HTTP status",
+      "status": "PASS",
+      "observed": 200,
+      "expected": 200
+    },
+    {
+      "check": "API analysis mode",
+      "status": "PASS",
+      "observed": "full_model",
+      "expected": "full_model"
+    },
+    {
+      "check": "API model name",
+      "status": "PASS",
+      "observed": "PhishGuard Character-Ngram + Lexical URL Classifier",
+      "expected": "PhishGuard Character-Ngram + Lexical URL Classifier"
+    },
+    {
+      "check": "API raw model probability exposed",
+      "status": "PASS",
+      "observed": 0.5528,
+      "expected": "non-null"
+    },
+    {
+      "check": "API calibrated probability exposed",
+      "status": "PASS",
+      "observed": 0.1311,
+      "expected": "non-null"
+    }
+  ],
+  "metric_boundaries": {
+    "model_holdout": "42,399 source URLs; raw SGD probability at threshold 0.50",
+    "calibration": "Platt fit on 22,330 grouped rows; calibration metrics evaluated on a disjoint 20,069-row grouped subset",
+    "system_regression": "Separate 100-URL loopback HTTP hybrid-system test; not a model holdout metric"
+  }
+}

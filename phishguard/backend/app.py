@@ -16,19 +16,6 @@ BACKEND_DIR = Path(__file__).resolve().parent
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-# Keep custom joblib classes importable whether Flask is started as app:app or
-# imported as backend.app during local tests.
-for _module_name, _class_name in (
-    ("phishguard_v8_model", "PhishGuardURLModelV8"),
-    ("phishguard_v9_model", "PhishGuardURLModelV9"),
-    ("phishguard_v10_model", "PhishGuardURLModelV10"),
-    ("phishguard_v11_model", "PhishGuardURLModelV11"),
-):
-    try:
-        globals()[_class_name] = getattr(__import__(_module_name, fromlist=[_class_name]), _class_name)
-    except Exception:
-        globals()[_class_name] = None
-
 try:
     from reputation_store import get_store_metadata, lookup_reputation
 except Exception as _reputation_import_error:
@@ -61,40 +48,21 @@ CORS(app)
 # =========================
 try:
     model = joblib.load(Path(__file__).with_name("phishing_web_model.pkl"))
+    if not (
+        isinstance(model, dict)
+        and model.get("format") == "phishguard_url_pipeline_v4"
+        and hasattr(model.get("pipeline"), "predict_proba")
+    ):
+        raise RuntimeError("phishing_web_model.pkl is not the canonical v4 URL pipeline bundle")
     MODEL_LOAD_ERROR = None
 except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
 API_VERSION = "4.4.1"
-MODEL_NAME = "PhishGuard URL Risk Classifier"
+MODEL_NAME = "PhishGuard Character-Ngram + Lexical URL Classifier"
 SCORE_METHOD = "Auditable URL Scoring + Safe Local Reputation Evidence Policy"
 AI_WEIGHT = 0.18
-
-MODEL_FEATURE_NAMES = [
-    "url_length",
-    "uses_https",
-    "netloc_length",
-    "path_length",
-    "dot_count",
-    "hyphen_count",
-    "at_count",
-    "question_count",
-    "equals_count",
-    "slash_count",
-    "digit_count",
-    "special_character_count",
-    "ip_address_flag",
-    "suspicious_keyword_count",
-    "brand_literal_count",
-    "brand_confusable_count",
-    "official_domain_flag",
-    "domain_lookalike_flag",
-    "minimum_brand_distance",
-    "maximum_brand_similarity",
-    "shortener_domain_flag",
-    "shortener_brand_path_flag"
-]
 
 # Every indicator shown by the API has a real, non-zero role in the weighted score.
 # The weights sum to 1.00. Critical and official-domain rules are applied afterwards
@@ -119,8 +87,8 @@ INDICATOR_DEFINITIONS = {
         "method": "Matches the parsed hostname against the backend's verified allowlist and look-alike rules."
     },
     "aiModelProbability": {
-        "label": "Calibrated AI-Assisted Risk",
-        "method": "Combines the loaded model's predict_proba output with URL-derived lexical evidence."
+        "label": "AI Model Probability",
+        "method": "Uses the production character-ngram + 21-lexical-feature SGD pipeline's raw predict_proba output in the hybrid score; the formally calibrated probability is reported separately."
     },
     "brandVerification": {
         "label": "Brand Impersonation",
@@ -842,49 +810,6 @@ def domain_brand_similarity_features(domain):
 # =========================
 # AI model functions
 # =========================
-def extract_url_features(url):
-    url = normalize_url(url)
-    lower = url.lower()
-    parsed = urlparse(url)
-    parsed_data = parse_url(url)
-    domain = parsed_data["domain"]
-    path = parsed_data["path"]
-    query = parsed_data["query"]
-    brands = list(OFFICIAL_DOMAINS.keys())
-    url_skeleton = normalize_confusable(lower)
-    official_flag = 1 if domain_is_official(domain)[0] else 0
-    domain_lookalike_flag, min_brand_distance, max_brand_similarity = domain_brand_similarity_features(domain)
-    shortener_flag = 1 if is_shortener_domain(domain) else 0
-    shortener_brand_path_flag = 1 if shortener_flag and find_brand_like_token(f"{path} {query}") else 0
-
-    # Feature layout must match train_web_model.py.
-    return [[
-        len(url),
-        1 if lower.startswith("https://") else 0,
-        len(parsed.netloc),
-        len(parsed.path),
-        url.count("."),
-        url.count("-"),
-        url.count("@"),
-        url.count("?"),
-        url.count("="),
-        url.count("/"),
-        sum(c.isdigit() for c in url),
-        len(re.findall(r"[^a-zA-Z0-9]", url)),
-        1 if re.search(r"(\d{1,3}\.){3}\d{1,3}", url) else 0,
-        sum(word in lower for word in SUSPICIOUS_KEYWORDS),
-        sum(brand in lower for brand in brands),
-        sum(normalize_confusable(brand) in url_skeleton for brand in brands),
-        official_flag,
-        domain_lookalike_flag,
-        min_brand_distance,
-        max_brand_similarity,
-        shortener_flag,
-        shortener_brand_path_flag
-    ]]
-
-
-
 def is_url_model_bundle():
     return (
         isinstance(model, dict)
@@ -899,58 +824,43 @@ def current_model_name():
 
 
 def build_model_feature_audit(features, url=None):
-    """
-    Supports both:
-      1) legacy 22-numeric-feature sklearn models; and
-      2) the v4 URL model bundle trained by training/train_url_model.py.
-    """
-    if is_url_model_bundle():
-        manifest = model.get("feature_manifest", [])
-        if not manifest:
-            manifest = [
-                {
-                    "name": "character_ngrams",
-                    "value": "3-5 character URL n-grams",
-                    "used_by_model": True,
-                    "model_importance": None,
-                    "model_importance_percent": None
-                },
-                {
-                    "name": "lexical_url_features",
-                    "value": "length, host, path, punctuation, digits, HTTPS and IP flags",
-                    "used_by_model": True,
-                    "model_importance": None,
-                    "model_importance_percent": None
-                }
-            ]
+    """Return the canonical v4 character-ngram and lexical feature manifest."""
+    if not is_url_model_bundle():
+        return [
+            {
+                "name": "character_ngrams",
+                "value": "unavailable in rules-only fallback",
+                "used_by_model": False,
+                "model_importance": None,
+                "model_importance_percent": None,
+            },
+            {
+                "name": "lexical_url_features",
+                "value": "deterministic fallback estimate only; not model inference",
+                "used_by_model": False,
+                "model_importance": None,
+                "model_importance_percent": None,
+            },
+        ]
+    manifest = model.get("feature_manifest", [])
+    if manifest:
         return manifest
-
-    values = list(features[0])
-    importances = getattr(model, "feature_importances_", None)
-
-    if len(values) != len(MODEL_FEATURE_NAMES):
-        raise RuntimeError(
-            f"Feature contract mismatch: extracted {len(values)} values for "
-            f"{len(MODEL_FEATURE_NAMES)} feature names."
-        )
-
-    if hasattr(model, "n_features_in_") and int(model.n_features_in_) != len(values):
-        raise RuntimeError(
-            f"Model contract mismatch: model expects {model.n_features_in_} features, "
-            f"but the API extracted {len(values)}."
-        )
-
-    audit = []
-    for index, (name, value) in enumerate(zip(MODEL_FEATURE_NAMES, values)):
-        importance = float(importances[index]) if importances is not None else None
-        audit.append({
-            "name": name,
-            "value": value,
+    return [
+        {
+            "name": "character_ngrams",
+            "value": "TF-IDF character n-grams (3-5)",
             "used_by_model": True,
-            "model_importance": round(importance, 8) if importance is not None else None,
-            "model_importance_percent": round(importance * 100, 4) if importance is not None else None
-        })
-    return audit
+            "model_importance": None,
+            "model_importance_percent": None,
+        },
+        {
+            "name": "lexical_url_features",
+            "value": "21 URL length, host, path, query, punctuation, digit, HTTPS, IP, Punycode and token features",
+            "used_by_model": True,
+            "model_importance": None,
+            "model_importance_percent": None,
+        },
+    ]
 
 
 def get_phishing_probability(features, url=None):
@@ -958,12 +868,10 @@ def get_phishing_probability(features, url=None):
         raise RuntimeError(f"AI model is unavailable: {MODEL_LOAD_ERROR or 'unknown loading error'}")
 
     try:
-        if is_url_model_bundle():
-            probability = model["pipeline"].predict_proba([url or ""])[0]
-            classes = list(model["pipeline"].classes_)
-        else:
-            probability = model.predict_proba(features)[0]
-            classes = list(getattr(model, "classes_", []))
+        if not is_url_model_bundle():
+            raise RuntimeError("The canonical v4 URL model bundle is unavailable.")
+        probability = model["pipeline"].predict_proba([url or ""])[0]
+        classes = list(model["pipeline"].classes_)
 
         if 1 in classes:
             phishing_index = classes.index(1)
@@ -979,7 +887,7 @@ def get_phishing_probability(features, url=None):
 
 
 def estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain):
-    """Continuous lexical estimate used to calibrate over-confident Random Forest votes."""
+    """Deterministic lexical estimate used only as rules-only fallback evidence."""
     target = f"{domain} {path} {query}".lower()
     target_skeleton = normalize_confusable(target)
     path_query = f"{path} {query}"
@@ -1730,7 +1638,7 @@ def analyse_url(url):
 
     # AI Model. Rules and reputation evidence must still provide a clear result
     # when an old joblib model cannot be imported on a deployment environment.
-    features = extract_url_features(url)
+    features = None
     model_feature_audit = build_model_feature_audit(features, url=url)
     feature_ai_probability = estimate_feature_ai_probability(url, domain, scheme, path, query, official_domain)
     model_prediction_error = None
