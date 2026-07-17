@@ -33,6 +33,5 @@ phishguard/training/*
 phishguard/dataset/raw/
 phishguard/dataset/PhishGuard_*.csv
 phishguard/dataset/PhishGuard_*_manifest.json
-phishguard/backend/.python-version
 phishguard/backend/phishguard_streaming_model*.py
 phishguard/backend/phishguard_v*_features.py

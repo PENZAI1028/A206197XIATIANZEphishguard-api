@@ -1,13 +1,13 @@
 {
-  "generated_at_utc": "2026-07-16T09:36:49.318886+00:00",
+  "generated_at_utc": "2026-07-17T09:41:40.895343+00:00",
   "target": "warmed loopback HTTP POST /predict",
   "warmup_requests": 10,
   "measured_requests": 100,
-  "mean_ms": 108.94786200013186,
-  "median_ms": 106.74809999909485,
-  "p95_ms": 135.4187449975143,
-  "min_ms": 60.24420000176178,
-  "max_ms": 154.64069999870844,
+  "mean_ms": 35.44654200144578,
+  "median_ms": 34.839300002204254,
+  "p95_ms": 51.108655000280116,
+  "min_ms": 20.17200001864694,
+  "max_ms": 79.64050001464784,
   "nfr_threshold_ms": 250,
   "passes_nfr": true
 }

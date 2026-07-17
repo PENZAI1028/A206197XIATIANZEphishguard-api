@@ -62,8 +62,8 @@ The confusion matrix in `[safe, phishing]` label order is
 `[[26476, 0], [175, 15748]]` (TN, FP, FN, TP).
 
 The separate 100-URL end-to-end API regression set in `backend/test_urls.csv`
-produces 99/100 correct predictions through actual loopback HTTP requests, with
-confusion matrix `[[49, 1], [0, 50]]`. This system-level result includes the API's rules and
+produces 100/100 correct predictions through actual loopback HTTP requests, with
+confusion matrix `[[50, 0], [0, 50]]`. This system-level result includes the API's rules and
 score aggregation and must not be confused with the grouped model holdout.
 
 ## Formal probability calibration
@@ -79,9 +79,11 @@ deterministic evidence and documented overrides.
 ## Additional evaluation evidence
 
 - `evaluation/results/http_performance.json` measures 100 warmed sequential
-  loopback HTTP `/predict` requests. P95 is 135.42 ms against the 250 ms NFR.
+  loopback HTTP `/predict` requests. The current P95 is 51.11 ms against the 250 ms NFR.
 - `evaluation/results/ablation_results.json` compares rules only, calibrated AI
-  only, AI plus deterministic rules, and the full system with reputation.
+  only, AI plus deterministic rules, and the full system with reputation. The
+  AI-only branch reads the calibrated decision threshold (0.540702) from
+  `model.metadata.probability_calibration.decision_threshold`.
 - `evaluation/results/model_comparison.json` compares Logistic Regression, SGD,
   Linear SVM, Random Forest, Extra Trees and Complement Naive Bayes on one
   bounded grouped split and shared feature matrix.

@@ -63,6 +63,13 @@ interface AIResult {
   risk_score: number;
   safety_score: number;
   critical_phishing: boolean;
+  analysis_mode: 'full_model' | 'rules_only_fallback' | string;
+  model_available: boolean;
+  model_prediction_error?: string | null;
+  warning?: string | null;
+  raw_ai_phishing_probability_percent?: number | null;
+  calibrated_ai_phishing_probability_percent?: number | null;
+  effective_ai_probability_percent?: number | null;
   explanations: string[];
   indicators: Indicator[];
   recommendations: string[];
@@ -167,7 +174,7 @@ function historyLabel(item: HistoryItem): string {
 
 const FRIENDLY_NAMES: Record<string, string> = {
   officialDomain: 'Official Domain Verification',
-  aiModelProbability: 'Calibrated AI-Assisted Risk',
+  aiModelProbability: 'AI-Assisted Risk',
   brandVerification: 'Brand Impersonation',
   homographAttack: 'Homograph & Typosquatting',
   urlStructure: 'URL Structure',
@@ -179,7 +186,7 @@ const FRIENDLY_NAMES: Record<string, string> = {
 
 const CHART_LABELS: Record<string, string> = {
   officialDomain: 'Official Domain Verification',
-  aiModelProbability: 'Calibrated AI-Assisted Risk',
+  aiModelProbability: 'AI-Assisted Risk',
   brandVerification: 'Brand Impersonation',
   homographAttack: 'Homograph & Typosquatting',
   urlStructure: 'URL Structure',
@@ -807,6 +814,41 @@ export function PhishingDetector({
         {result && styles && tier && (
           <div className="space-y-5">
 
+            {result.analysis_mode === 'rules_only_fallback' || !result.model_available ? (
+              <Card className="border-2 border-amber-500 bg-amber-50 shadow">
+                <CardContent className="pt-5 pb-5">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-6 h-6 text-amber-700 shrink-0" />
+                    <div className="text-sm text-amber-900">
+                      <p className="font-bold">Rules-only fallback result</p>
+                      <p className="mt-1">{result.warning || 'The AI model was unavailable. This result uses deterministic URL checks only.'}</p>
+                      <p className="mt-2 font-mono text-xs">Analysis mode: {result.analysis_mode}</p>
+                      <p className="font-mono text-xs">Model available: No</p>
+                      {result.model_prediction_error && (
+                        <p className="mt-1 font-mono text-xs break-all">Model error: {result.model_prediction_error}</p>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border border-emerald-300 bg-emerald-50 shadow-sm">
+                <CardContent className="pt-4 pb-4 text-sm text-emerald-900">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <CheckCircle className="w-5 h-5" />
+                    Full AI-assisted analysis
+                  </div>
+                  <div className="mt-2 grid gap-1 text-xs font-mono sm:grid-cols-2">
+                    <p>Analysis mode: {result.analysis_mode}</p>
+                    <p>Model available: Yes</p>
+                    <p>Raw model probability: {result.raw_ai_phishing_probability_percent ?? '—'}%</p>
+                    <p>Platt-calibrated probability: {result.calibrated_ai_phishing_probability_percent ?? '—'}%</p>
+                    <p>Effective AI risk used in weighting: {result.effective_ai_probability_percent ?? '—'}%</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* ── SECTION 2: Main Result Banner ──────────────────────────── */}
             <Card className={`shadow-lg border-2 ${styles.card}`}>
               <CardContent className="pt-6 pb-6">
@@ -1075,13 +1117,13 @@ export function PhishingDetector({
 
                                   return (
                                     <div className="mb-3 bg-white border border-gray-200 rounded p-3 text-xs text-gray-700 space-y-0">
-                                      {row('Effective AI phishing probability',
+                                      {row('Effective AI risk used in weighting',
                                         fmt(v.phishing_probability_percent, '%'))}
                                       {row('Raw model probability',
                                         fmt(v.raw_phishing_probability_percent, '%'))}
                                       {row('Feature-evidence probability',
                                         fmt(v.feature_ai_probability_percent, '%'))}
-                                      {row('Calibrated AI-assisted probability',
+                                      {row('Platt-calibrated probability',
                                         fmt(v.calibrated_phishing_probability_percent, '%'))}
                                       {row('Adjusted AI risk score',
                                         fmt(v.adjusted_ai_risk_score !== undefined
