@@ -146,7 +146,6 @@ def main():
         bundle["probability_calibrator"] = calibrator
         bundle["probability_calibrator_input"] = "raw_probability_logit"
         bundle["metadata"]["probability_calibration"] = metrics
-        bundle["metadata"]["decision_threshold"] = decision_threshold
         joblib.dump(bundle, model_path)
         metrics["artifact_sha256_after_calibration"] = hashlib.sha256(model_path.read_bytes()).hexdigest()
         (output_dir / "calibration_metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")

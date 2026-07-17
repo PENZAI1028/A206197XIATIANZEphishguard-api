@@ -1,12 +1,12 @@
 {
-  "generated_at_utc": "2026-07-16T09:37:47.552030+00:00",
+  "generated_at_utc": "2026-07-17T09:41:11.475739+00:00",
   "scope": "bounded candidate comparison; same TF-IDF character 3-5 gram plus 21-lexical feature matrix for all models",
   "source_rows": 20000,
   "train_rows": 15740,
   "test_rows": 4260,
   "group_split_random_state": 42,
   "max_tfidf_features": 20000,
-  "feature_fit_transform_seconds": 6.67041220000101,
+  "feature_fit_transform_seconds": 1.6229685999860521,
   "selection_note": "The production SGD choice also considers sparse scalability, probability support and deployment size; this benchmark is comparative evidence, not a universal ranking.",
   "results": [
     {
@@ -15,8 +15,8 @@
       "precision": 1.0,
       "recall": 0.9726495726495726,
       "f1": 0.9861351819757366,
-      "fit_seconds": 0.7665850999983377,
-      "predict_seconds": 0.005288300002575852
+      "fit_seconds": 0.16948010001215152,
+      "predict_seconds": 0.0014335000014398247
     },
     {
       "model": "SGD log-loss",
@@ -24,8 +24,8 @@
       "precision": 1.0,
       "recall": 0.9846153846153847,
       "f1": 0.9922480620155039,
-      "fit_seconds": 0.24561470000480767,
-      "predict_seconds": 0.0029588999968837015
+      "fit_seconds": 0.035027400008402765,
+      "predict_seconds": 0.0005340000207070261
     },
     {
       "model": "Linear SVM",
@@ -33,8 +33,8 @@
       "precision": 1.0,
       "recall": 0.9829059829059829,
       "f1": 0.9913793103448276,
-      "fit_seconds": 0.2751585999940289,
-      "predict_seconds": 0.003990099998190999
+      "fit_seconds": 0.040346099995076656,
+      "predict_seconds": 0.0009845000167842954
     },
     {
       "model": "Random Forest",
@@ -42,8 +42,8 @@
       "precision": 0.9982708933717579,
       "recall": 0.9868945868945869,
       "f1": 0.9925501432664756,
-      "fit_seconds": 0.5683878999989247,
-      "predict_seconds": 0.08844569999928353
+      "fit_seconds": 0.157638999982737,
+      "predict_seconds": 0.03218320000451058
     },
     {
       "model": "Extra Trees",
@@ -51,8 +51,8 @@
       "precision": 1.0,
       "recall": 0.9783475783475784,
       "f1": 0.9890552995391705,
-      "fit_seconds": 0.47880170000280486,
-      "predict_seconds": 0.0978291999999783
+      "fit_seconds": 0.12165960000129417,
+      "predict_seconds": 0.03468029998475686
     },
     {
       "model": "Complement Naive Bayes",
@@ -60,8 +60,8 @@
       "precision": 0.9980532121998702,
       "recall": 0.8763532763532763,
       "f1": 0.933252427184466,
-      "fit_seconds": 0.04452800000581192,
-      "predict_seconds": 0.0063916999934008345
+      "fit_seconds": 0.006002999987686053,
+      "predict_seconds": 0.0013586000131908804
     }
   ]
 }

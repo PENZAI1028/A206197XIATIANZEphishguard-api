@@ -136,8 +136,25 @@ class FeatureParticipationTests(unittest.TestCase):
         self.assertEqual(payload["analysis_mode"], "rules_only_fallback")
         self.assertFalse(payload["model_available"])
         self.assertIsNotNone(payload["warning"])
+        self.assertIn("simulated load failure", payload["model_prediction_error"])
         self.assertIsNone(payload["raw_ai_phishing_probability"])
         self.assertIsNone(payload["calibrated_ai_phishing_probability"])
+
+    def test_calibrated_threshold_comes_from_nested_metadata(self):
+        expected = backend.model["metadata"]["probability_calibration"]["decision_threshold"]
+        self.assertAlmostEqual(backend.get_model_decision_threshold(), expected)
+        payload = self.predict("https://example.com")
+        self.assertAlmostEqual(payload["model_info"]["model_decision_threshold"], expected)
+
+    def test_gov_my_apex_is_exact_official_domain(self):
+        payload = self.predict("https://www.gov.my")
+        indicators = {item["name"]: item for item in payload["indicators"]}
+        self.assertEqual(payload["prediction"], 0)
+        self.assertEqual(payload["decision"], "Safe")
+        self.assertFalse(payload["critical_phishing"])
+        self.assertEqual(indicators["homographAttack"]["score"], 0)
+        self.assertEqual(indicators["officialDomain"]["status"], "safe")
+        self.assertFalse(backend.domain_is_official("attacker.gov.my")[0])
 
 
 if __name__ == "__main__":

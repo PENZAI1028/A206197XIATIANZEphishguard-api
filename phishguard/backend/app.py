@@ -142,6 +142,7 @@ DEFAULT_OFFICIAL_DOMAINS = {
     "cimb": ["cimb.com.my", "cimbclicks.com.my"],
     "touchngo": ["touchngo.com.my", "tngdigital.com.my"],
     "ukm": ["ukm.my", "ftsm.ukm.my", "siswa.ukm.edu.my"],
+    "mygov": ["gov.my"],
     "okooo": ["okooo.com"],
     "render": ["render.com", "dashboard.render.com"]
 }
@@ -155,7 +156,7 @@ def load_trusted_domain_config():
     """
     default = {
         "official_domains": DEFAULT_OFFICIAL_DOMAINS,
-        "exact_only_official_domains": ["render.com", "dashboard.render.com"],
+        "exact_only_official_domains": ["render.com", "dashboard.render.com", "gov.my"],
         "shared_hosting_domains": []
     }
 
@@ -991,6 +992,14 @@ def calibrate_ai_probability(raw_probability):
     logit = math.log(clipped / (1 - clipped))
     calibrated = model["probability_calibrator"].predict_proba([[logit]])[0, 1]
     return float(max(0.0, min(1.0, calibrated)))
+
+
+def get_model_decision_threshold(default=0.5):
+    """Return the canonical calibrated decision threshold from model metadata."""
+    if not is_url_model_bundle():
+        return float(default)
+    calibration = model.get("metadata", {}).get("probability_calibration", {})
+    return float(calibration.get("decision_threshold", default))
 
 
 def indicator(name, score, status, explanation, value=None, weight=None):
@@ -2006,7 +2015,7 @@ def analyse_url(url):
         "model_features": model_feature_audit,
         "model_feature_count": len(model_feature_audit),
         "model_decision_threshold": (
-            model.get("metadata", {}).get("decision_threshold")
+            get_model_decision_threshold()
             if is_url_model_bundle() else None
         ),
         "indicator_weights": {
@@ -2160,6 +2169,7 @@ def predict():
         "api_version": API_VERSION,
         "analysis_mode": model_info["analysis_mode"],
         "model_available": model_info["model_available"],
+        "model_prediction_error": model_info["model_prediction_error"],
         "warning": model_info["warning"],
         "calibration_method": model_info["calibration_method"],
         "confidence": model_info["ai_confidence_percent"],
