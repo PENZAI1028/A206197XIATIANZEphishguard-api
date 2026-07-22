@@ -59,8 +59,8 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "4.4.1"
-MODEL_NAME = "PhishGuard Character-Ngram + Lexical URL Classifier"
+API_VERSION = "4.4.2"
+MODEL_NAME = "PhishGuard Hardened V9 URL Classifier"
 SCORE_METHOD = "Auditable URL Scoring + Safe Local Reputation Evidence Policy"
 AI_WEIGHT = 0.18
 
@@ -87,8 +87,8 @@ INDICATOR_DEFINITIONS = {
         "method": "Matches the parsed hostname against the backend's verified allowlist and look-alike rules."
     },
     "aiModelProbability": {
-        "label": "AI Model Probability",
-        "method": "Uses the production character-ngram + 21-lexical-feature SGD pipeline's raw predict_proba output in the hybrid score; the formally calibrated probability is reported separately."
+        "label": "AI-Assisted Risk",
+        "method": "Uses the hardened V9 character/word n-gram URL classifier plus lexical security features. Raw model probability, Platt-calibrated probability, URL-evidence probability, and the effective AI risk used for weighting are reported separately."
     },
     "brandVerification": {
         "label": "Brand Impersonation",
@@ -820,7 +820,7 @@ def is_url_model_bundle():
 
 def current_model_name():
     if is_url_model_bundle():
-        return str(model.get("model_name") or "Character-Ngram + Lexical URL Classifier")
+        return str(model.get("model_name") or "PhishGuard Hardened V9 URL Classifier")
     return MODEL_NAME
 
 

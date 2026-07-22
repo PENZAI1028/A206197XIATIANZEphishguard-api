@@ -28,11 +28,18 @@ BRAND_TERMS = (
     "coinbase", "maybank", "cimb", "touchngo", "shopee", "lazada", "grab",
     "amazon", "facebook", "instagram", "whatsapp", "netflix", "discord", "steam",
     "github", "linkedin", "tiktok", "telegram", "bankislam", "publicbank",
+    "render", "dashboard", "figma", "cisco", "ukm", "ukmfolio", "moodle",
 )
 
 BAD_TLDS = {
     "xyz", "top", "click", "ru", "tk", "ml", "cf", "gq", "work", "loan",
     "monster", "rest", "fit", "buzz", "cam", "sbs", "cyou", "zip", "mov",
+}
+
+SHORTENER_DOMAINS = {
+    "goo.su", "bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly",
+    "rebrand.ly", "shorturl.at", "ow.ly", "buff.ly", "s.id",
+    "lnkd.in", "tiny.cc", "rb.gy", "short.io", "bl.ink",
 }
 
 CONFUSABLE_MAP = {
@@ -93,6 +100,11 @@ def root_and_sld(host: str) -> tuple[str, str]:
     return root, root_parts[0] if root_parts else ""
 
 
+def is_shortener_host(host: str) -> bool:
+    host = (host or "").lower().removeprefix("www.")
+    return any(host == item or host.endswith("." + item) for item in SHORTENER_DOMAINS)
+
+
 def edit_distance_one_or_less(a: str, b: str) -> bool:
     if a == b:
         return True
@@ -124,13 +136,21 @@ def lexical_features(urls: Sequence[object]) -> np.ndarray:
         root, sld = root_and_sld(host)
         sld_skeleton = skeleton(sld)
         words = f"{host} {path} {query}".lower()
+        path_query_skeleton = skeleton(f"{path} {query}".lower())
         labels = [x for x in host.split(".") if x]
         raw_tokens = [x for x in re.split(r"[^a-z0-9]+", sld) if len(x) >= 3]
         token_skeletons = [skeleton(x) for x in raw_tokens]
+        path_tokens = [x for x in re.split(r"[^a-z0-9]+", path_query_skeleton) if len(x) >= 3]
         keyword_hits = sum(term in words or skeleton(term) in skeleton(words) for term in SUSPICIOUS_TERMS)
         exact_brand = any(term in token_skeletons for term in BRAND_TERMS)
         near_brand = any(edit_distance_one_or_less(sld_skeleton, term) for term in BRAND_TERMS if len(sld_skeleton) >= 4)
         brand_in_root = any(term in skeleton(root) for term in BRAND_TERMS)
+        brand_in_path = any(
+            term in path_query_skeleton
+            or any(edit_distance_one_or_less(token, term) for token in path_tokens)
+            for term in BRAND_TERMS
+        )
+        shortener_flag = is_shortener_host(host)
         digit_count = sum(ch.isdigit() for ch in url)
         host_digit_count = sum(ch.isdigit() for ch in host)
         special_count = sum(not ch.isalnum() for ch in url)
@@ -168,6 +188,10 @@ def lexical_features(urls: Sequence[object]) -> np.ndarray:
             float(any(token != skel for token, skel in zip(raw_tokens, token_skeletons))),
             float(len(raw_tokens) >= 2),
             float(host.endswith(".com") or host.endswith(".com.my")),
+            float(shortener_flag),
+            float(shortener_flag and brand_in_path),
+            float(brand_in_path),
+            float(bool(CONFUSABLE_RE.search(path or query))),
         ])
     return np.asarray(rows, dtype=np.float32)
 
@@ -192,7 +216,7 @@ class PhishGuardURLModelV9:
         self.feature_manifest = [
             {"name": "character_ngrams", "value": "2-6 character URL n-grams", "used_by_model": True, "model_importance": None, "model_importance_percent": None},
             {"name": "word_ngrams", "value": "1-2 token URL n-grams", "used_by_model": True, "model_importance": None, "model_importance_percent": None},
-            {"name": "lexical_security_features", "value": "host depth, entropy, digits, Punycode, confusables, brand-like tokens, redirects and credential keywords", "used_by_model": True, "model_importance": None, "model_importance_percent": None},
+            {"name": "lexical_security_features", "value": "host depth, entropy, digits, Punycode, confusables, brand-like tokens, shortener paths, redirects and credential keywords", "used_by_model": True, "model_importance": None, "model_importance_percent": None},
         ]
 
     @property

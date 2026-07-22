@@ -1,149 +1,177 @@
 {
   "format": "phishguard_url_pipeline_v4",
-  "model_name": "PhishGuard Character-Ngram + Lexical URL Classifier",
-  "generated_at_utc": "2026-07-16T09:35:03.445164+00:00",
-  "artifact": "phishing_web_model.pkl",
-  "artifact_sha256": "18053e500d8c22e1ddbab2aa07ac26af2d24e3fb0378ba4f5521c8f0bacd1512",
-  "source_data": "dataset/PhiUSIIL_Phishing_URL_Dataset.csv",
-  "source_data_sha256": "a236549cd369cd80bd478ff8e1779cbf44c58d5c3f79f7a51a1adbed7d06d1c6",
+  "model_name": "PhishGuard Hardened V9 URL Classifier",
+  "generated_at_utc": "2026-07-22T06:46:12.480957+00:00",
+  "source_dataset": "phishguard/dataset/PhishGuard_v7_quality_1_200_000.csv",
+  "training_rows": 401863,
+  "holdout_rows": 44648,
+  "hard_generated_rows": 4442,
+  "official_safe_generated_rows": 1845,
   "label_contract": {
-    "uci_phiusiil_source": {
-      "0": "phishing",
-      "1": "legitimate"
-    },
-    "project_canonical": {
-      "0": "safe_or_legitimate",
-      "1": "phishing"
-    },
-    "mapping": "source 0 -> canonical 1; source 1 -> canonical 0",
-    "synthetic_lookalikes": "canonical label 1 (phishing), appended only to training"
+    "0": "legitimate/candidate legitimate",
+    "1": "phishing or confirmed malicious URL risk"
   },
-  "source_raw_class_counts": {
-    "0": 100945,
-    "1": 134850
-  },
-  "source_rows_after_cleaning": 235370,
-  "canonical_class_counts_after_cleaning": {
-    "0_safe_or_legitimate": 134850,
-    "1_phishing": 100520
-  },
-  "split": {
-    "method": "GroupShuffleSplit",
-    "group": "registered root-like domain",
-    "random_state": 42,
-    "test_size": 0.2,
-    "train_rows_before_synthetic": 192971,
-    "synthetic_lookalike_rows_train_only": 50000,
-    "train_rows_total": 242971,
-    "holdout_rows": 42399,
-    "holdout_distinct_root_domains": 32690,
-    "leakage_control": "Group split before augmentation; synthetic canonical-label-1 phishing URLs added only to training."
-  },
-  "model": {
-    "text_features": "TF-IDF character n-grams (3-5)",
-    "lexical_feature_count": 21,
-    "lexical_feature_names": [
-      "url_length",
-      "host_length",
-      "path_length",
-      "query_length",
-      "host_dot_count",
-      "host_hyphen_count",
-      "at_count",
-      "question_count",
-      "equals_count",
-      "percent_count",
-      "slash_count",
-      "digit_count",
-      "digit_ratio",
-      "special_character_count",
-      "suspicious_token_count",
-      "https_flag",
-      "ip_host_flag",
-      "punycode_flag",
-      "root_label_digit_flag",
-      "url_length_at_least_80_flag",
-      "url_length_at_least_120_flag"
-    ],
-    "classifier": "SGDClassifier(loss=log_loss, alpha=0.000004, class_weight=balanced, early_stopping=true, n_iter_no_change=8, random_state=42)"
-  },
-  "holdout_metrics": {
-    "accuracy": 0.9958725441637775,
-    "precision": 1.0,
-    "recall": 0.9890096087420712,
-    "f1": 0.994474440339743,
-    "confusion_matrix": [
-      [
-        26476,
-        0
-      ],
-      [
-        175,
-        15748
-      ]
-    ]
-  },
+  "model_family": "HashingVectorizer character/word n-grams + lexical security features + SGD log-loss classifier",
+  "lexical_feature_count": 34,
   "probability_calibration": {
-    "method": "Platt scaling (logistic regression on raw-probability logits)",
-    "group_split_random_state": 43,
-    "calibration_rows": 22330,
-    "evaluation_rows": 20069,
-    "calibration_distinct_root_domains": 16345,
-    "evaluation_distinct_root_domains": 16345,
-    "brier_before": 0.0038657570751783757,
-    "brier_after": 0.0026347209406618415,
-    "ece_10_bins_before": 0.00778621209138169,
-    "ece_10_bins_after": 0.0009874246941068033,
-    "log_loss_before": 0.02155975953343911,
-    "log_loss_after": 0.015525685856399662,
-    "decision_threshold": 0.5407020475819505
+    "method": "Platt logistic calibration on logit(raw predict_proba), with hard URL regression cases included",
+    "decision_threshold": 0.5,
+    "calibration_rows": 44664
   },
-  "api_regression_test": {
-    "dataset": "backend/test_urls.csv",
-    "rows": 100,
-    "accuracy": 1.0,
-    "precision": 1.0,
-    "recall": 1.0,
-    "f1": 1.0,
+  "holdout_metrics_raw_probability": {
+    "accuracy": 0.960692528220749,
+    "precision": 0.9314856499718627,
+    "recall": 0.9854144962047924,
+    "f1": 0.9576914732045997,
     "confusion_matrix": [
       [
-        50,
-        0
+        23030,
+        1461
       ],
       [
-        0,
-        50
+        294,
+        19863
       ]
     ],
-    "scope": "End-to-end loopback HTTP POST /predict regression; separate from the grouped model holdout.",
-    "result_files": [
-      "evaluation/results/system_regression_current.json",
-      "evaluation/results/system_regression_current.csv"
-    ]
+    "roc_auc": 0.9711412749753559,
+    "average_precision": 0.9402638794509856
   },
-  "http_performance": {
-    "generated_at_utc": "2026-07-17T09:41:40.895343+00:00",
-    "target": "warmed loopback HTTP POST /predict",
-    "warmup_requests": 10,
-    "measured_requests": 100,
-    "mean_ms": 35.44654200144578,
-    "median_ms": 34.839300002204254,
-    "p95_ms": 51.108655000280116,
-    "min_ms": 20.17200001864694,
-    "max_ms": 79.64050001464784,
-    "nfr_threshold_ms": 250,
-    "passes_nfr": true
-  },
-  "training_environment": {
-    "python": "3.14.6",
-    "joblib": "1.5.3",
-    "numpy": "2.5.0",
-    "pandas": "3.0.3",
-    "scipy": "1.18.0",
-    "scikit-learn": "1.9.0"
-  },
-  "verification": {
-    "model_alignment_audit": "evaluation/results/model_alignment.json",
-    "split_integrity_audit": "evaluation/results/split_integrity.json"
-  }
+  "hard_case_predictions": [
+    {
+      "url": "https://www.goog1e.com",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://www.g0ogle.com",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://www.g00gle.com",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://www.go0gle.com",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://goog1e.com/login",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://www.cisc0.com/login",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://www.fig3a.com/make/L0YDXp4y0VwOtwIWf3xemR",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://dashb0ard.render.com/web/srv-d8o2c6kvikkc73e1gttg/events",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://goo.su/i.whatAapp",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://bit.ly/paypa1-login",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://tinyurl.com/micros0ft-security",
+      "label": 1,
+      "raw_probability_percent": 100.0,
+      "calibrated_probability_percent": 94.67,
+      "raw_prediction": 1,
+      "calibrated_prediction": 1
+    },
+    {
+      "url": "https://www.google.com",
+      "label": 0,
+      "raw_probability_percent": 0.0,
+      "calibrated_probability_percent": 1.26,
+      "raw_prediction": 0,
+      "calibrated_prediction": 0
+    },
+    {
+      "url": "https://accounts.google.com/login",
+      "label": 0,
+      "raw_probability_percent": 0.0,
+      "calibrated_probability_percent": 1.26,
+      "raw_prediction": 0,
+      "calibrated_prediction": 0
+    },
+    {
+      "url": "https://dashboard.render.com/web/srv-d8o2c6kvikkc73e1gttg/settings",
+      "label": 0,
+      "raw_probability_percent": 0.0,
+      "calibrated_probability_percent": 1.26,
+      "raw_prediction": 0,
+      "calibrated_prediction": 0
+    },
+    {
+      "url": "https://www.figma.com",
+      "label": 0,
+      "raw_probability_percent": 0.0,
+      "calibrated_probability_percent": 1.26,
+      "raw_prediction": 0,
+      "calibrated_prediction": 0
+    },
+    {
+      "url": "https://ukmfolio.ukm.my/course/view.php?id=2716",
+      "label": 0,
+      "raw_probability_percent": 0.0,
+      "calibrated_probability_percent": 1.26,
+      "raw_prediction": 0,
+      "calibrated_prediction": 0
+    }
+  ],
+  "notes": [
+    "Hard training examples include digit-letter swaps, l/I/1 confusion, o/O/0 confusion, rn/m and vv/w visual substitutions.",
+    "Short-link paths are trained as suspicious when they carry protected brand look-alike tokens.",
+    "The model does not fetch URLs, follow redirects, inspect page content, or query live external reputation services."
+  ],
+  "sklearn_version": "1.9.0",
+  "numpy_version": "2.5.0",
+  "pandas_version": "3.0.3"
 }
