@@ -8,7 +8,7 @@ import time
 import unicodedata
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from difflib import SequenceMatcher
 import sys
 
@@ -59,7 +59,7 @@ except Exception as e:
     model = None
     MODEL_LOAD_ERROR = str(e)
 
-API_VERSION = "4.4.2"
+API_VERSION = "4.4.4"
 MODEL_NAME = "PhishGuard Hardened V9 URL Classifier"
 SCORE_METHOD = "Auditable URL Scoring + Safe Local Reputation Evidence Policy"
 AI_WEIGHT = 0.18
@@ -230,6 +230,19 @@ PROTECTED_SERVICE_LABELS = {
     "ukmfolio", "siswa", "ftsm", "fism", "moodle", "elearning", "lms",
     "binance", "coinbase", "paypal", "maybank", "cimb", "touchngo", "shopee", "lazada",
     "github", "chatgpt", "claude", "amazon", "facebook", "instagram", "whatsapp"
+}
+
+INSTITUTIONAL_SERVICE_LABELS = {
+    "ukm", "ukmfolio", "siswa", "ftsm", "fism", "moodle", "elearning", "lms"
+}
+
+BENIGN_PATH_TOKEN_PREFIXES = {
+    "course", "view", "material", "materials", "module", "lesson", "chapter",
+    "topic", "week", "page", "file", "folder", "resource", "section", "item",
+    "user", "profile", "calendar", "event", "events", "setting", "settings",
+    "dashboard", "admin", "api", "auth", "login", "logout", "search", "index",
+    "download", "uploads", "content", "plugin", "theme", "assets", "static",
+    "spid", "spidv", "srv", "web"
 }
 
 SHORTENER_DOMAINS = {
@@ -693,6 +706,19 @@ def protected_brand_terms():
     ]
 
 
+def protected_institutional_service_terms():
+    """
+    Small, high-confidence set of institutional service labels that should not
+    appear as standalone unofficial registrable domains such as ftsm.rich.
+    Generic words like login/account are deliberately excluded.
+    """
+    return [
+        {"brand": "ukm", "term": normalize_confusable(label), "source": label}
+        for label in sorted(INSTITUTIONAL_SERVICE_LABELS)
+        if len(normalize_confusable(label)) >= 4
+    ]
+
+
 def find_brand_token_in_unofficial_root(domain):
     """
     Detect a protected brand token inside an unofficial registrable domain.
@@ -739,6 +765,41 @@ def find_brand_token_in_unofficial_root(domain):
     return None
 
 
+def find_protected_service_token_in_unofficial_root(domain):
+    domain = strip_www(domain)
+    root = get_root_domain(domain)
+    raw_sld = get_sld(root).lower()
+
+    if not raw_sld:
+        return None
+
+    raw_tokens = [
+        token for token in re.split(r"[^a-z0-9]+", raw_sld)
+        if len(token) >= 4
+    ]
+    raw_tokens.append(raw_sld)
+
+    for raw_token in dict.fromkeys(raw_tokens):
+        token_skeleton = normalize_confusable(raw_token)
+        for entry in protected_institutional_service_terms():
+            term = entry["term"]
+            if token_skeleton != term:
+                continue
+
+            return {
+                "brand": entry["brand"],
+                "service_label": entry["source"],
+                "domain": domain,
+                "root_domain": root,
+                "raw_token": raw_token,
+                "token_skeleton": token_skeleton,
+                "matched_term": term,
+                "used_confusable_character": raw_token != term,
+            }
+
+    return None
+
+
 def find_brand_like_token(text, min_ratio=0.88):
     skeleton = normalize_confusable(text)
     tokens = [
@@ -779,6 +840,69 @@ def find_brand_like_token(text, min_ratio=0.88):
                 }
 
     return None
+
+
+def tokenize_path_text(path="", query=""):
+    text = unquote(f"{path or ''} {query or ''}")
+    return [
+        token.lower()
+        for token in re.split(r"[^A-Za-z0-9]+", text)
+        if len(token) >= 4
+    ]
+
+
+def is_benign_path_token(token):
+    token = str(token or "").lower()
+    if token in BENIGN_PATH_TOKEN_PREFIXES:
+        return True
+    # Render service IDs and similar machine-generated IDs often appear in
+    # official dashboards. They are not human-readable impersonation payloads.
+    if len(token) >= 12 and sum(char.isdigit() for char in token) >= 2:
+        return True
+    if re.fullmatch(r"v\d{1,3}", token):
+        return True
+    if re.fullmatch(r"[a-z]{1,6}v\d{1,3}", token):
+        return True
+    if any(token.startswith(prefix) for prefix in BENIGN_PATH_TOKEN_PREFIXES):
+        return True
+    if re.fullmatch(r"(id|uid|sid|pid|cid|page|item|file|week|topic|module)\d{1,6}", token):
+        return True
+    return False
+
+
+def find_path_obfuscation(path="", query=""):
+    """
+    Detect suspicious mixed alphanumeric path tokens on otherwise legitimate
+    hosts. This catches payload-style paths such as r1chsoftam and richsoftam1
+    without treating normal query IDs like ?id=2716 as phishing evidence.
+    """
+    suspicious = []
+
+    for token in tokenize_path_text(path, query):
+        if is_benign_path_token(token):
+            continue
+
+        has_alpha = bool(re.search(r"[a-z]", token))
+        has_digit = bool(re.search(r"\d", token))
+        if not has_alpha or not has_digit:
+            continue
+
+        token_skeleton = normalize_confusable(token)
+        has_middle_digit = bool(re.search(r"[a-z]\d[a-z]", token))
+        has_long_tail_digit = bool(re.fullmatch(r"[a-z]{7,}\d{1,2}", token))
+        has_confusable = has_confusable_marker(token)
+
+        if len(token) >= 7 and (has_middle_digit or has_long_tail_digit or has_confusable):
+            suspicious.append({
+                "token": token,
+                "token_skeleton": token_skeleton,
+                "reason": "mixed letter/digit path token consistent with leetspeak or obfuscated payload naming",
+                "middle_digit": has_middle_digit,
+                "trailing_digit": has_long_tail_digit,
+                "confusable_marker": has_confusable
+            })
+
+    return suspicious
 
 
 def domain_brand_similarity_features(domain):
@@ -897,6 +1021,7 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
     root = get_root_domain(domain)
     sld = get_sld(root)
     brand_path_match = find_brand_like_token(path_query)
+    path_obfuscation_matches = find_path_obfuscation(path, query)
 
     score = 4 if official_domain else 12
 
@@ -908,6 +1033,9 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
 
         if brand_path_match:
             score += 48
+
+    if path_obfuscation_matches:
+        score += 42 if official_domain else 30
 
     if re.search(r"(\d{1,3}\.){3}\d{1,3}", domain):
         score += 36
@@ -979,7 +1107,7 @@ def estimate_feature_ai_probability(url, domain, scheme, path, query, official_d
         score += 5
 
     if official_domain:
-        score = min(score, 8)
+        score = min(score, 45 if path_obfuscation_matches else 8)
 
     return float(max(0.02, min(0.95, score / 100)))
 
@@ -1212,6 +1340,20 @@ def detect_brand_impersonation(domain, path="", query=""):
             "20%"
         )
 
+    service_root_match = find_protected_service_token_in_unofficial_root(domain)
+    if service_root_match:
+        return indicator(
+            "brandVerification",
+            90,
+            "danger",
+            (
+                "Protected institutional service label appears as an unofficial "
+                "registrable domain."
+            ),
+            service_root_match,
+            "20%"
+        )
+
     domain_skeleton = normalize_confusable(domain)
     root = get_root_domain(domain)
 
@@ -1435,6 +1577,7 @@ def detect_url_structure(url, domain, scheme, path, query):
     structure_score = 0
     structure_reasons = []
     brand_path_match = find_brand_like_token(f"{path} {query}")
+    path_obfuscation_matches = find_path_obfuscation(path, query)
 
     if is_shortener_domain(domain):
         structure_score += 45
@@ -1491,20 +1634,29 @@ def detect_url_structure(url, domain, scheme, path, query):
         structure_score += 30
         structure_reasons.append("URL contains encoded characters")
 
+    if path_obfuscation_matches:
+        structure_score += 55 if official else 45
+        structure_reasons.append("Path contains mixed letter/digit obfuscation token")
+
     structure_score = min(100, structure_score)
 
     # For verified official domains, ordinary long paths or subdomains should not become phishing.
     # Keep only truly critical structure issues.
-    if official and structure_score < 100:
+    if official and structure_score < 100 and not path_obfuscation_matches:
         structure_score = 0
         structure_reasons = []
+
+    value = {
+        "reasons": structure_reasons if structure_reasons else [],
+        "path_obfuscation": path_obfuscation_matches
+    } if path_obfuscation_matches else (structure_reasons if structure_reasons else "None detected")
 
     return indicator(
         "urlStructure",
         structure_score,
         "danger" if structure_score >= 70 else "warning" if structure_score >= 30 else "safe",
         "URL structure issue(s): " + ", ".join(structure_reasons) if structure_reasons else "No abnormal URL structure was detected.",
-        structure_reasons if structure_reasons else "None detected",
+        value,
         "10%"
     )
 
@@ -1638,6 +1790,7 @@ def analyse_url(url):
     query = parsed_data["query"]
 
     official_domain, official_brand, official_matched = domain_is_official(domain)
+    path_obfuscation_matches = find_path_obfuscation(path, query)
 
     indicators = []
 
@@ -1676,10 +1829,15 @@ def analyse_url(url):
     # post-hoc calibration does not silently redefine the established weights.
     model_risk_score = raw_ai_score if not model_prediction_error else feature_ai_score
 
-    # For verified official domains, the AI score is kept in model_info,
-    # but the effective risk is capped to prevent false positives like dashboard.render.com.
+    # For verified official domains, the AI score is kept in model_info, but
+    # the effective risk is capped to prevent false positives like dashboard.render.com.
+    # Suspicious path payloads such as r1chsoftam/richsoftam1 are not allowed
+    # to disappear under that cap.
     if official_domain:
-        ai_score = min(model_risk_score, 15)
+        if path_obfuscation_matches:
+            ai_score = max(min(model_risk_score, 45), min(feature_ai_score, 45), 25)
+        else:
+            ai_score = min(model_risk_score, 15)
         effective_ai_probability = ai_score / 100
         ai_explanation = (
             f"Raw model probability: {raw_ai_phishing_probability * 100:.1f}%. "
@@ -1720,6 +1878,7 @@ def analyse_url(url):
             "raw_ai_risk_score": raw_ai_score,
             "feature_ai_risk_score": feature_ai_score,
             "calibrated_ai_risk_score": calibrated_ai_score,
+            "path_obfuscation": path_obfuscation_matches,
             "effective_ai_risk_percent": ai_score,
             "adjusted_ai_risk_score": ai_score,
             "weight_percent": int(AI_WEIGHT * 100),
@@ -1939,10 +2098,19 @@ def analyse_url(url):
             )
         risk_score = overridden_score
 
+    official_path_obfuscation = official_domain and bool(path_obfuscation_matches)
+    if official_path_obfuscation and not critical:
+        overridden_score = max(risk_score, 45)
+        if overridden_score != risk_score:
+            applied_overrides.append(
+                "verified official-domain suspicious-path floor: mixed letter/digit path token raised final risk to at least 45"
+            )
+        risk_score = overridden_score
+
     # Important false-positive control:
     # A verified official domain must not become high risk because of long path,
     # random service ID, dashboard URL, or AI-only uncertainty.
-    if official_domain and not critical:
+    if official_domain and not critical and not official_path_obfuscation:
         overridden_score = min(risk_score, 10)
         if overridden_score != risk_score:
             applied_overrides.append("verified official-domain cap: final risk limited to at most 10")
@@ -1984,6 +2152,7 @@ def analyse_url(url):
         "analysis_mode": analysis_mode,
         "model_available": model_available,
         "warning": analysis_warning,
+        "path_obfuscation": path_obfuscation_matches,
         "calibration_method": (
             model.get("metadata", {}).get("probability_calibration", {}).get("method")
             if is_url_model_bundle() else None
